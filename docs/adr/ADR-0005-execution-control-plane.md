@@ -1,3 +1,37 @@
+---
+id: ADR-0005
+title: Execution Control Plane
+status: Accepted
+owner: Phupha
+created: 2026-09-16
+updated: 2026-09-16
+review_cycle: Quarterly
+architecture_stage: ADR_FREEZE
+---
+
+## Decision Drivers
+
+| Driver | Priority |
+|---|---|
+| Architectural consistency | P0 |
+| Security boundary | P0 |
+| Auditability | P1 |
+
+## Non-Goals
+
+This ADR does not define implementation-specific code or package layout.
+
+## Risks
+
+| Risk | Mitigation |
+|---|---|
+| Future implementation drift | SPEC documents |
+| Semantic ambiguity | ADR Governance |
+
+# Patch Instructions
+
+Append this header and governance sections to `ADR-0005.md`.
+
 ADR-0005: Execution Control Plane
 
 * Status: Accepted
