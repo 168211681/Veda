@@ -1,0 +1,6 @@
+architecture_version: 0.1.0
+stage: ADR_FREEZE
+rfc_count: 50
+adr_count: 10
+spec_count: 0
+last_freeze: 2026-09-16
