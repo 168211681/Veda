@@ -7,6 +7,9 @@ created: 2026-09-16
 updated: 2026-09-16
 review_cycle: Quarterly
 architecture_stage: ADR_FREEZE
+
+supersedes: null
+superseded_by: null
 ---
 
 ## Decision Drivers
