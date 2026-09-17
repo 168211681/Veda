@@ -31,10 +31,6 @@ This ADR does not define implementation-specific code or package layout.
 | Future implementation drift | SPEC documents |
 | Semantic ambiguity | ADR Governance |
 
-# Patch Instructions
-
-Append this header and governance sections to `ADR-0002.md`.
-
 ADR-0002: Event Fabric and Chronicle Separation
 
 * Status: Accepted
