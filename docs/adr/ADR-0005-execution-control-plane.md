@@ -31,10 +31,6 @@ This ADR does not define implementation-specific code or package layout.
 | Future implementation drift | SPEC documents |
 | Semantic ambiguity | ADR Governance |
 
-# Patch Instructions
-
-Append this header and governance sections to `ADR-0005.md`.
-
 ADR-0005: Execution Control Plane
 
 * Status: Accepted
