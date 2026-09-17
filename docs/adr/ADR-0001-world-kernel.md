@@ -1,1044 +1,515 @@
----
+
+
+
+
+⸻
+
 id: ADR-0001
 title: World Kernel
 status: Accepted
 owner: Phupha
 created: 2026-09-16
-updated: 2026-09-16
+updated: 2026-09-17
 review_cycle: Quarterly
-architecture_stage: ADR_FREEZE
+architecture_stage: ADR_ACCEPTED
 
 supersedes: null
 superseded_by: null
----
 
-## Decision Drivers
+Context
 
-| Driver | Priority |
-|---|---|
-| Architectural consistency | P0 |
-| Security boundary | P0 |
-| Auditability | P1 |
+Veda requires a canonical authority for the current modeled state of the world.
 
-## Non-Goals
+Multiple subsystems may observe, reason about, remember, simulate, or attempt to change the world. Without a single authoritative owner, different components can produce conflicting representations of the same state.
 
-This ADR does not define implementation-specific code or package layout.
+The architecture therefore requires a dedicated World Kernel that owns the authoritative current modeled World State.
 
-## Risks
+The World Kernel represents Veda’s modeled understanding of the world. It does not claim ownership of external reality.
 
-| Risk | Mitigation |
-|---|---|
-| Future implementation drift | SPEC documents |
-| Semantic ambiguity | ADR Governance |
+Problem
 
-ADR-0001: World Kernel Ownership
+Without a World Kernel:
 
-* Status: Accepted
-* Date: 2026-09-16
-* Decision Type: Core Architecture
-* Scope: Veda World Model, World State, Event Processing, Brain, Tools, Agents
-* Supersedes: None
-* Superseded by: None
+* different agents may maintain conflicting world states
+* observations may be mistaken for verified state
+* brain outputs may be treated as authoritative
+* tools may directly mutate internal state
+* concurrent updates may silently overwrite one another
+* simulations may contaminate real state
+* failures may produce partially committed state
+* historical events may be incorrectly treated as current truth
 
-⸻
+The architecture therefore requires explicit separation between observation, evidence, verification, events, history, projection, and authoritative current state.
 
-1. Context
+Decision Drivers
 
-Veda มีหลาย subsystem ที่สามารถรับรู้ วิเคราะห์ คาดการณ์ หรือเสนอการเปลี่ยนแปลงต่อโลกได้ เช่น
+The decision is driven by the following requirements:
 
-* Brain
-* Planner
-* Decision Engine
-* Tool System
-* External World Interface
-* Verification Engine
-* Memory
-* Knowledge
-* Multi-Agent System
-* Simulation Engine
-* Learning/Evolution Engine
+1. One authoritative owner for current modeled World State.
+2. Separation of intelligence from authority.
+3. Explicit distinction between external reality and Veda’s model of reality.
+4. Deterministic and auditable state transitions.
+5. Safe handling of concurrency.
+6. Explicit handling of uncertainty.
+7. Prevention of partial authoritative commits.
+8. Isolation of simulation from real state.
+9. Support for multiple agents sharing one coherent modeled world.
+10. Full observability and traceability of state-changing actions.
+11. Compatibility with replaceable models, tools, and providers.
+12. Human authority remains above the system.
 
-หากแต่ละ subsystem สามารถแก้ไข World State ได้โดยตรง จะเกิดปัญหา:
+Non-Goals
 
-1. ไม่สามารถระบุได้ว่าใครเป็นผู้เปลี่ยน State
-2. เกิดหลายแหล่งความจริง (Multiple Sources of Truth)
-3. Agent สามารถ bypass Authorization ได้
-4. Brain สามารถเปลี่ยนโลกโดยไม่ผ่าน Verification
-5. Simulation อาจเขียนผลจำลองลง World จริง
-6. Memory หรือ Knowledge อาจถูกตีความผิดเป็น Current World State
-7. Concurrent agents อาจเขียน State ชนกัน
-8. Audit trail ไม่สามารถรับประกันความสมบูรณ์
-9. การ replay ประวัติไม่สามารถสร้าง World เดิมได้อย่างน่าเชื่อถือ
-10. ระบบ Evolution อาจเปลี่ยน operational state โดยไม่ผ่าน governance
+The World Kernel does not:
 
-ดังนั้น Veda ต้องมี boundary ที่ชัดเจนระหว่าง:
+* control external reality
+* replace external systems of record
+* become the reasoning or intelligence layer
+* become the memory system
+* execute arbitrary tools directly
+* decide authorization by itself
+* treat model output as authoritative truth
+* make simulations authoritative
+* guarantee that the modeled world is identical to reality
 
-ระบบที่สามารถ “คิดเกี่ยวกับโลก”
-
-กับ
-
-ระบบที่มีสิทธิ์ “ยืนยันว่าโลกของ Veda เปลี่ยนไปแล้ว”
-
-⸻
-
-2. Decision
-
-Veda จะกำหนด World Kernel เป็นเจ้าของเพียงหนึ่งเดียวของ Authoritative Current World State
-
-ไม่มี subsystem อื่นสามารถ mutate authoritative World State ได้โดยตรง
-
-World Kernel เป็นผู้รับผิดชอบ:
-
-* Entity State
-* Relationship State
-* World Version
-* State Transition
-* World Views
-* Transaction Boundary
-* World Delta Application
-* Conflict Detection
-* State Reconstruction
-* Current State Projection
-* Temporal State
-* Provenance References
-* Verification References
-
-ทุกการเปลี่ยนแปลง authoritative World State ต้องเข้าสู่ World Kernel ผ่านเส้นทางที่กำหนดไว้
-
-Intent
-  ↓
-Goal
-  ↓
-Plan
-  ↓
 Decision
-  ↓
-Authorization
-  ↓
-Capability Lease
-  ↓
-Capability Registry
-  ↓
-External World Interface
-  ↓
-Tool / MCP
-  ↓
-External System
-  ↓
-Observation
-  ↓
-Evidence
-  ↓
-Verification
-  ↓
-Event
-  ↓
-Chronicle
-  ↓
-World Kernel
-  ↓
-Authoritative World State
 
-⸻
-
-3. Core Principle
-
-Veda กำหนดหลักการ:
+Veda will implement a World Kernel as the sole authoritative owner of the current modeled World State.
 
 Only the World Kernel may commit authoritative World State transitions.
 
-กล่าวอีกแบบ:
+The following authority separation is mandatory:
 
-Brain may propose. Tools may act. External systems may change. Observations may report. Verification may validate. But only the World Kernel may commit the modeled World State.
+Component	Authority
+Human	Ultimate authority
+Brain	Proposes and reasons
+Planner	Produces plans/goals
+Authorization	Determines permitted action
+Tools	Act on external systems
+Observation	Reports observed information
+Evidence	Represents supported information
+Verification	Validates claims/results
+Event Fabric	Transports events
+Chronicle	Preserves durable history
+World Projection	Builds modeled state
+World Kernel	Commits authoritative current modeled state
+Simulation	Produces hypothetical state only
 
-⸻
+The fundamental rule is:
 
-4. World Kernel Responsibilities
+Brain may propose. Tools may act. External systems may change. Observations may report. Verification may validate. Only the World Kernel commits authoritative modeled World State.
 
-World Kernel ต้องเป็น authority สำหรับ Current World State แต่ไม่ใช่ authority สำหรับทุกเรื่องในระบบ
+World Is Not Reality
 
-World Kernel เป็นเจ้าของ
+The World Kernel represents Veda’s modeled state of the world.
 
-World
-├── Entities
-├── Relationships
-├── State
-├── Events
-├── Versions
-├── Temporal State
-├── Provenance References
-├── World Views
-└── State Transitions
-
-World Kernel ไม่เป็นเจ้าของ
-
-Authorization Policy
-Brain Reasoning
-Model Parameters
-Human Authority
-External System State
-Raw Evidence
-Agent Private Memory
-Simulation State
-Tool Implementation
-Knowledge Corpus
-Constitution
-
-สิ่งเหล่านี้มี owner ของตัวเอง
-
-⸻
-
-5. World Kernel Boundary
-
-World Kernel ต้องทำหน้าที่เป็น boundary ระหว่าง:
-
-Cognition
-    ↓
-Decision
-    ↓
-Execution
-    ↓
-Observation
-    ↓
-Verification
-    ↓
-WORLD KERNEL
-    ↓
-Authoritative World
-
-ห้ามมีเส้นทาง:
-
-Brain ───────────────→ World State
-Tool ────────────────→ World State
-Memory ──────────────→ World State
-Knowledge ───────────→ World State
-Simulation ──────────→ World State
-Model ───────────────→ World State
-Agent ───────────────→ World State
-
-โดยตรง
-
-⸻
-
-6. World State vs Reality
-
-World Kernel ไม่ได้เป็นเจ้าของ Reality
-
-Veda แยก:
-
-Reality
-   ↓
-Observation
-   ↓
-Evidence
-   ↓
-Verification
-   ↓
-World State
-
-ดังนั้น:
+Therefore:
 
 World ≠ Reality
 
-World เป็นแบบจำลองที่ Veda ใช้แทนสิ่งที่เชื่อว่าเกิดขึ้นใน Reality โดยต้องมี provenance และ epistemic status กำกับ
+External systems remain authoritative for their own external state.
 
-ตัวอย่าง:
+The World Kernel must never silently claim that its internal representation is equivalent to external reality.
 
-Reality:
-ไฟล์บน disk ถูกลบจริง
-Observation:
-filesystem tool รายงานว่าไฟล์ไม่พบ
-Evidence:
-filesystem observation #123
-Verification:
-independent read check = confirmed
-World:
-file.status = DELETED
+State Ownership
 
-World Kernel จึงไม่สามารถ “สร้าง Reality” เพียงเพราะมีการเปลี่ยน World State
+The World Kernel owns:
 
-⸻
+* authoritative current modeled entities
+* authoritative modeled relationships
+* current modeled status
+* state versions
+* state transitions
+* consistency rules
+* conflict handling
+* uncertainty state
 
-7. Brain Authority Boundary
+External systems remain owners of:
 
-Brain ไม่มีสิทธิ์ commit World State
+* bank balances
+* cloud resources
+* GitHub repositories
+* physical devices
+* external databases
+* third-party services
+* other externally authoritative state
 
-Brain สามารถ:
+Veda may observe and model external state but does not become the owner of that external state merely by observing it.
 
-* วิเคราะห์
-* reason
-* retrieve
-* generate hypotheses
-* interpret intent
-* propose goals
-* propose plans
-* propose actions
-* request simulation
-* request tools
-* request verification
-* generate learning proposals
+World Kernel Responsibilities
 
-Brain ไม่สามารถ:
+The World Kernel is responsible for:
 
-* self-authorize
-* directly mutate World
-* directly commit World State
-* bypass Capability Registry
-* bypass Authorization
-* declare its own output as verified
-* modify Constitution
-* grant itself capabilities
-* grant itself authority
+1. Maintaining authoritative current modeled World State.
+2. Validating state transitions.
+3. Enforcing state invariants.
+4. Maintaining state versions.
+5. Detecting conflicting transitions.
+6. Handling concurrency.
+7. Representing uncertainty explicitly.
+8. Rejecting invalid transitions.
+9. Preventing partial authoritative commits.
+10. Maintaining provenance for committed state.
+11. Exposing controlled read interfaces.
+12. Exposing controlled state-transition interfaces.
+13. Producing auditable state-change records.
+14. Supporting deterministic reconstruction where required.
 
-ดังนั้น:
+World State Transition
 
-Brain
-  ↓
-Proposal
-  ↓
-Control Plane
-  ↓
-Authorization
-  ↓
-Execution
-  ↓
-Verification
-  ↓
-World Kernel
+Every authoritative state transition must contain sufficient information to identify and audit the transition.
 
-ไม่ใช่:
+A transition must carry, where applicable:
 
-Brain
-  ↓
-World
+* transition_id
+* world_id
+* previous_version
+* new_version
+* actor_id
+* event_id
+* causation_id
+* authorization_ref
+* verification_ref
+* timestamp
+* delta
+* provenance
 
-⸻
+A state transition must not silently overwrite an existing authoritative state.
 
-8. External System Boundary
+Read Path
 
-External systems เป็น authority ของ State ภายนอกของตัวเอง
+Consumers must not directly access the authoritative World State database as an architectural shortcut.
 
-ตัวอย่าง:
+The preferred read path is:
 
-Filesystem → owns filesystem state
-GitHub → owns repository state
-Database → owns database state
-Operating System → owns process state
-Bank API → owns account state
-Physical Device → owns physical device state
+Consumer → World Query / World View → World Kernel
 
-Veda ไม่สามารถประกาศว่า external state เปลี่ยนแล้วเพียงเพราะ Veda ส่ง command สำเร็จ
+World Views may provide derived representations, but they must remain traceable to the authoritative World State.
 
-ต้องแยก:
+Write Path
 
-Action
-Execution Result
-Observation
-Verification
-External State
-World State
+The canonical state transition path is:
 
-ตัวอย่าง:
+Observation → Evidence → Verification → Event → Chronicle → World Projection → World Kernel → Current World
 
-DELETE file
-   ↓
-Tool says success
-   ↓
-Observation
-   ↓
-Filesystem verification
-   ↓
-Confirmed absent
-   ↓
-World Kernel commits:
-file.status = DELETED
+Not every operation necessarily requires every stage, but bypassing the World Kernel for authoritative state mutation is prohibited.
 
-ดังนั้น:
+Privileged execution follows the broader control-plane pipeline:
+
+Intent → Planning/Goal → Authorization → Lease → Capability → Execution → Verification → Commit → Event → Chronicle
+
+The World Kernel is the authority responsible for committing the modeled world transition after required validation and authorization conditions have been satisfied.
+
+Event and History Relationship
+
+Events represent occurrences in the system and are not automatically equivalent to current truth.
+
+The Chronicle preserves durable historical records.
+
+The World Kernel represents authoritative current modeled state.
+
+Therefore:
+
+* Event ≠ Current World State
+* Chronicle ≠ Current World State
+* Current World State is derived and governed separately from historical records
+
+A historical event must not automatically mutate authoritative current state without passing the required validation and projection rules.
+
+External State Boundary
+
+When Veda interacts with an external system:
+
+1. Veda may issue an authorized action.
+2. The external system may accept, reject, or partially process the action.
+3. Veda must observe the resulting external state where possible.
+4. The result must be verified according to the operation’s requirements.
+5. The World Kernel may then update the modeled state.
+
+Execution success does not automatically mean outcome success.
+
+Therefore:
 
 Execution Success ≠ Outcome Success
 
-⸻
-
-9. World Transition Contract
-
-World State ต้องเปลี่ยนผ่าน transition ที่ตรวจสอบได้
-
-แนวคิดหลัก:
-
-World(t)
-+
-Verified Event / Authorized State Transition
-+
-Evidence
-+
-Policy Constraints
-↓
-World(t+1)
-
-ทุก transition ต้องมีอย่างน้อย:
-
-transition_id
-world_id
-previous_version
-new_version
-actor_id
-event_id
-causation_id
-authorization_ref
-verification_ref
-timestamp
-delta
-provenance
-
-World Kernel ต้อง reject transition หาก:
-
-* previous version ไม่ตรง
-* authorization ไม่ถูกต้อง
-* verification requirement ไม่ครบ
-* schema ไม่ถูกต้อง
-* delta ขัดกับ invariant
-* event ซ้ำโดยไม่เป็น idempotent
-* provenance หาย
-* actor ไม่มี authority ที่เกี่ยวข้อง
-* transition ทำให้ World State invalid
-
-⸻
-
-10. World Versioning
-
-World ต้องเป็น versioned state
-
-ตัวอย่าง:
-
-World v100
-   ↓
-Event E101
-   ↓
-World v101
-   ↓
-Event E102
-   ↓
-World v102
-
-ห้ามมี:
-
-World
- ↓
-แก้ค่าทับ
- ↓
-ไม่รู้ว่าใครแก้
-
-World Version ต้องสามารถเชื่อมกลับไปยัง:
-
-Previous World Version
-Event
-Actor
-Action
-Evidence
-Verification
-Authorization
-
-ได้
-
-⸻
-
-11. Read Path
-
-Subsystem ต่าง ๆ สามารถอ่าน World ได้ผ่าน World Query / World View
-
-Canonical read path:
-
-World Query
-   ↓
-Visibility / Policy
-   ↓
-World View
-   ↓
-Context Selection
-   ↓
-Brain
-
-Brain ไม่ควรอ่าน database ภายในโดยตรงเพื่อข้าม World Kernel boundary
-
-เหตุผลคือ World Kernel ต้องควบคุม:
-
-* visibility
-* version
-* temporal state
-* consistency
-* privacy
-* provenance
-* authorization
-* freshness
-
-⸻
-
-12. Write Path
-
-Canonical write path:
-
-Observation
-   ↓
-Evidence
-   ↓
-Verification
-   ↓
-Event
-   ↓
-Chronicle
-   ↓
-World Projection
-   ↓
-World Kernel
-   ↓
-Current World
-
-สำหรับ external action:
-
-Intent
-   ↓
-Goal
-   ↓
-Plan
-   ↓
-Decision
-   ↓
-Authorization
-   ↓
-Lease
-   ↓
-Capability
-   ↓
-Tool
-   ↓
-External System
-   ↓
-Observation
-   ↓
-Verification
-   ↓
-Event
-   ↓
-Chronicle
-   ↓
-World Kernel
-
-⸻
-
-13. Event Sourcing Relationship
-
-World Kernel สามารถ reconstruct World State จาก canonical event history ได้
-
-แนวคิด:
-
-Event History
-     ↓
-Replay
-     ↓
-World Projection
-     ↓
-World State
-
-ดังนั้น Event และ World State มีความสัมพันธ์:
+Concurrency
 
-Event = historical fact/record
-World State = current projection
+Concurrent state transitions must be explicitly handled.
 
-ไม่ควรนำ Current World State ไปแทน Event History
+The World Kernel may use the following outcomes:
 
-และไม่ควรนำ Event Log มา query เป็น Current World ทุกกรณีโดยไม่มี projection layer
+* ACCEPT
+* MERGE
+* REJECT
+* HUMAN_REVIEW
 
-⸻
+Silent overwrite is prohibited.
 
-14. Simulation Isolation
+State versioning must be used to detect stale transitions and conflicting updates.
 
-Simulation ต้องไม่สามารถ mutate authoritative World
+Uncertainty
 
-Current World
-    ↓
-World Snapshot
-    ↓
-Simulation World
-    ↓
-Simulated Actions
-    ↓
-Predicted Future
+Unknown information must remain explicitly unknown.
 
-Simulation สามารถสร้าง:
+The system must not convert:
 
-SimWorld v1
-SimWorld v2
-Counterfactual World
-Future World
+* missing information into certainty
+* stale information into current truth
+* model inference into verified fact
+* failed observation into a negative assertion
 
-แต่สิ่งเหล่านี้ไม่ใช่ authoritative World
+Where the system cannot establish the current state with sufficient confidence, the World Kernel must preserve an explicit uncertainty state.
 
-หากต้องการนำผล simulation มาใช้ ต้องผ่าน:
+Multi-Agent World
 
-Simulation Result
-   ↓
-Decision
-   ↓
-Authorization
-   ↓
-Real Execution
-   ↓
-Observation
-   ↓
-Verification
-   ↓
-World Kernel
+Multiple agents may reason about the same modeled world.
 
-⸻
+Agents must not maintain independent authoritative versions of the shared World State.
 
-15. Multi-Agent Isolation
+The World Kernel provides the shared authoritative modeled state.
 
-ในระบบ Multi-Agent:
+Agents may maintain local working memory or hypotheses, but those representations do not become authoritative World State until committed through the World Kernel.
 
-One Reality
-One Authoritative World
-Many Agents
-Many Views
+Simulation
 
-Agent แต่ละตัวอาจมี:
+Simulation must be isolated from authoritative World State.
 
-* Private Memory
-* Private Working State
-* Private Hypotheses
-* Private Goals
-* Private Plans
+A simulation may:
 
-แต่ไม่ควรสร้าง authoritative World ของตัวเองโดยอ้างว่าเป็น Reality เดียวกัน
+* create hypothetical entities
+* modify hypothetical state
+* test possible transitions
+* evaluate plans
+* predict potential outcomes
 
-การเปลี่ยน Shared World ต้องผ่าน World Kernel และ authority model
+Simulation must not silently modify real authoritative World State.
 
-⸻
+The boundary between simulation state and real state must be explicit.
 
-16. Concurrency
+Failure Handling
 
-World Kernel ต้องรองรับ concurrent transitions
+The World Kernel must prevent partially committed authoritative state.
 
-ตัวอย่าง:
+If a transition cannot be completed safely:
 
-Agent A → World v100 → proposes v101
-Agent B → World v100 → proposes v101
+* the authoritative transition must not be partially committed
+* the failure must be observable
+* the reason must be recorded
+* uncertainty must be represented where appropriate
+* recovery must be possible
+* human review must be available for unresolved conflicts
 
-World Kernel ต้องตรวจ:
+The system must prefer an explicit unknown or rejected transition over silently corrupting authoritative state.
 
-version conflict
-causality
-authorization
-semantic conflict
-resource conflict
+Alternatives Considered
 
-แล้วเลือก:
+Brain as World Authority
 
-ACCEPT
-MERGE
-REJECT
-HUMAN_REVIEW
+Rejected.
 
-ห้าม silent overwrite
+The Brain is an intelligence and reasoning layer. Intelligence does not grant authority.
 
-⸻
+Allowing the Brain to directly own World State would violate the separation between capability and authority.
 
-17. Failure Handling
+Event Log as World Authority
 
-หาก transition ไม่สามารถ commit ได้:
+Rejected.
 
-PROPOSED
-   ↓
-VALIDATING
-   ↓
-REJECTED
+Events are historical records and runtime messages. They are not inherently the canonical current state.
 
-ต้องไม่เกิด partial authoritative state
+The current modeled state requires explicit projection and ownership.
 
-หากเกิด uncertainty:
+Database as World Authority
 
-World State = UNKNOWN
+Rejected as an architectural concept.
 
-แทนที่จะเดาค่า:
+A database is a storage mechanism, not an authority model.
 
-World State = probably_true
+Authority belongs to the World Kernel. Storage is an implementation concern governed separately by the storage architecture.
 
-เมื่อหลักฐานใหม่เข้ามา:
+Multiple Agents Owning Independent World States
 
-UNKNOWN
-   ↓
-OBSERVED
-   ↓
-VERIFIED
-   ↓
-CURRENT STATE
+Rejected.
 
-⸻
+Independent authoritative states would create conflicting realities inside the system.
 
-18. Security Invariants
+Agents may maintain local hypotheses, but shared authoritative state must have one owner.
+
+Consequences
+
+Positive Consequences
+
+* clear state ownership
+* reduced ambiguity between reasoning and authority
+* safer multi-agent coordination
+* explicit external-state boundaries
+* auditable state transitions
+* controlled concurrency
+* better failure recovery
+* simulation isolation
+* easier model/provider replacement
+* stronger architectural governance
+
+Negative Consequences
+
+* increased implementation complexity
+* additional validation steps
+* additional state metadata
+* greater storage and logging requirements
+* more complex concurrency handling
+* additional latency for some state-changing operations
+* more engineering required before autonomous execution can be trusted
+
+These costs are accepted because authoritative state corruption is more expensive than architectural complexity.
+
+Risks
+
+Risk	Mitigation
+World Kernel becomes a monolith	Keep intelligence, execution, storage, and projection responsibilities separated
+Stale modeled state	Versioning, timestamps, provenance, verification
+Incorrect observations	Evidence and verification gates
+Concurrent updates	Version checks and explicit conflict outcomes
+External state divergence	External-state boundary and re-observation
+Partial commits	Atomic transition handling
+Model hallucination	Brain outputs remain non-authoritative
+Event/state confusion	Explicit separation between Event, Chronicle, and World State
+Simulation contamination	Separate simulation state
+Unauthorized mutation	Controlled write path and authorization references
+
+Dependencies
+
+This ADR depends on and interacts with:
+
+* ADR-0002: Event Fabric and Chronicle
+* ADR-0003: Evidence, Knowledge, Memory, and Experience
+* ADR-0004: Brain Non-Authority
+* ADR-0005: Execution Control Plane
+* ADR-0007: Storage Architecture
+* ADR-0010: MVP Vertical Slice
+
+The exact RFC identifiers governing the World Model / World State layer have not yet been established in the repository.
+
+This is a traceability gap and must be resolved before the ADR Freeze Gate is considered complete.
+
+Revisit Conditions
+
+This decision must be revisited if:
+
+1. Veda adopts a fundamentally different world-state architecture.
+2. A distributed authoritative state model becomes necessary.
+3. World State can no longer be safely owned by one logical authority.
+4. External systems require a different synchronization model.
+5. The authority model defined by the Constitution changes.
+6. New execution requirements invalidate the current transition model.
+7. Multi-agent coordination requires a different consistency model.
+8. A future architecture introduces a formally equivalent or stronger authority boundary.
+
+Any change to this decision must follow the repository governance process and may require a new ADR rather than silently modifying this decision.
+
+Architectural Invariants
+
+The following invariants are mandatory:
 
 WK-001
-
-Only World Kernel may commit authoritative World State.
+There is one logical authoritative owner of current modeled World State.
 
 WK-002
-
-Brain cannot directly mutate World State.
+Only the World Kernel may commit authoritative World State transitions.
 
 WK-003
-
-Tools cannot directly mutate World State.
+Brain intelligence does not grant World State authority.
 
 WK-004
-
-Simulation cannot mutate authoritative World.
+External systems remain authoritative for their own external state.
 
 WK-005
-
-Memory cannot become World State merely by retrieval.
+World State must not be treated as identical to Reality.
 
 WK-006
-
-Knowledge cannot become World State merely by inference.
+Authoritative state transitions must be versioned and traceable.
 
 WK-007
-
-Model output cannot become World State without evidence/verification requirements being satisfied.
+Silent overwrite of conflicting authoritative state is prohibited.
 
 WK-008
-
-External execution success cannot automatically become verified outcome.
+Unknown information must remain explicitly unknown.
 
 WK-009
-
-World Kernel cannot grant authority to itself.
+Simulation state must not silently modify authoritative World State.
 
 WK-010
-
-World Kernel cannot modify Constitution.
+Authoritative state must not be partially committed.
 
 WK-011
-
-No silent World State overwrite.
+Execution success must not automatically be treated as outcome success.
 
 WK-012
+Authoritative state-changing actions must remain observable and auditable.
 
-Every authoritative transition must be traceable to an event.
+Traceability
 
-WK-013
+Constitutional Traceability
 
-Every sensitive transition must reference authorization.
+This ADR implements the following constitutional principles:
 
-WK-014
+* Human remains ultimate authority.
+* Capability does not imply authority.
+* Knowledge does not imply authority.
+* Intelligence does not imply authority.
+* Brain is non-authoritative.
+* World Kernel owns authoritative current modeled World State.
+* AI outputs are untrusted until validated.
+* Autonomy must be bounded, observable, and recoverable.
+* Every meaningful action must be observable.
+* There must be one authoritative owner per state.
 
-Every transition requiring verification must reference verification evidence.
+RFC Traceability
 
-WK-015
+The repository does not currently expose established RFC identifiers for the World Kernel / World State decision.
 
-Historical World State must remain reconstructable according to retention policy.
+No RFC identifier is invented here.
 
-⸻
+RFC mapping must be added once the corresponding RFC artifacts exist.
 
-19. Alternatives Considered
+ADR Traceability
 
-Alternative A: Any subsystem may mutate World
+Related decisions:
 
-Advantages
+* ADR-0002: Event Fabric and Chronicle
+* ADR-0003: Evidence, Knowledge, Memory, and Experience
+* ADR-0004: Brain Non-Authority
+* ADR-0005: Execution Control Plane
+* ADR-0007: Storage Architecture
+* ADR-0010: MVP Vertical Slice
 
-* Simple implementation
-* Less infrastructure
-* Faster initial development
+Decision Metadata
 
-Disadvantages
+Field	Value
+ADR ID	ADR-0001
+Status	Accepted
+Owner	Phupha
+Architecture Stage	ADR_ACCEPTED
+Review Cycle	Quarterly
+Supersedes	None
+Superseded By	None
 
-* Multiple sources of truth
-* Impossible to enforce consistent authorization
-* Audit becomes unreliable
-* Brain can bypass control boundaries
-* Concurrent mutation becomes difficult
-* Security boundary collapses
+Review Record
 
-Rejected.
+Date	Reviewer	Result	Notes
+2026-09-17	Architecture Review	Accepted with traceability gap	RFC mapping remains unresolved and must be established before ADR Freeze
 
-⸻
+Freeze Status
 
-Alternative B: Brain owns World State
+This ADR is Accepted but does not by itself indicate that the repository-wide ADR Freeze Gate has passed.
 
-Advantages
+Repository-wide Freeze requires validation of:
 
-* Natural for an AI-centric architecture
-* Simple mental model
-* Fast interaction between cognition and state
+1. ADR structural compliance.
+2. Constitutional traceability.
+3. RFC traceability.
+4. ADR dependency integrity.
+5. Decision graph integrity.
+6. Governance compliance.
+7. Repository-wide architectural consistency.
 
-Disadvantages
-
-* Brain becomes authority
-* Model output can become state without verification
-* Prompt/model failures become state corruption
-* Impossible to cleanly separate intelligence from authority
-* Model replacement becomes dangerous
-
-Rejected.
-
-⸻
-
-Alternative C: Database owns World State
-
-Advantages
-
-* Technically straightforward
-* Strong transactional guarantees
-* Mature database tooling
-
-Disadvantages
-
-A database is storage infrastructure, not necessarily semantic authority.
-
-It does not inherently understand:
-
-* World semantics
-* provenance
-* authorization
-* verification
-* temporal meaning
-* world transitions
-* agent authority
-* simulation boundaries
-
-Rejected as the architectural authority boundary.
-
-A database may implement the World Kernel’s persistence layer.
-
-⸻
-
-Alternative D: World Kernel owns authoritative World State
-
-Advantages
-
-* Single semantic authority
-* Clear mutation boundary
-* Strong auditability
-* Easier verification
-* Easier replay
-* Easier multi-agent coordination
-* Easier simulation isolation
-* Easier future evolution
-* Clear separation between cognition and authority
-
-Disadvantages
-
-* More architecture
-* More implementation work
-* World Kernel becomes critical infrastructure
-* Requires disciplined APIs
-* Requires careful transaction and concurrency design
-
-Accepted.
-
-⸻
-
-20. Consequences
-
-Positive
-
-Veda gains a single authoritative semantic boundary:
-
-World Kernel
-     ↓
-Authoritative World
-
-This makes it possible to reason about:
-
-* who changed the world
-* why it changed
-* what authorization existed
-* what evidence supported the change
-* whether the outcome was verified
-* what World version existed before
-* what World version exists now
-* how to reconstruct historical state
-
-It also prevents the Brain from becoming an accidental god-king with database credentials.
-
-Humanity has suffered enough from badly scoped permissions.
-
-⸻
-
-Negative
-
-World Kernel becomes a critical subsystem.
-
-Poor design here could affect the entire Veda architecture.
-
-Therefore World Kernel requires:
-
-* strong schemas
-* transaction semantics
-* concurrency control
-* versioning
-* invariant tests
-* security tests
-* replay tests
-* recovery tests
-* deterministic behavior where practical
-* observability
-* migration strategy
-
-⸻
-
-21. Dependencies
-
-This ADR depends on:
-
-RFC-0001 Constitution
-RFC-0002 World Model
-RFC-0003 Event Model
-RFC-0004 State & World Transition
-RFC-0008 Action Model
-RFC-0010 Authorization & Policy
-RFC-0012 Evidence Model
-RFC-0026 Verification Engine
-RFC-0027 Rollback & Recovery
-RFC-0031 Event/Audit/Trace Fabric
-RFC-0032 Veda Chronicle
-
-It establishes architectural constraints for:
-
-RFC-0018 Brain Architecture
-RFC-0020 Planner
-RFC-0023 Future & Scenario Engine
-RFC-0024 Simulation
-RFC-0025 Value & Decision
-RFC-0028 Tool Registry
-RFC-0029 External World Interface
-RFC-0035 Experience
-RFC-0036 Learning
-RFC-0037 Evolution
-RFC-0044 Multi-Agent World
-RFC-0045 Shared/Private World
-RFC-0046 Federation
-RFC-0049 Intent Computing
-RFC-0050 World Computing
-
-⸻
-
-22. Implementation Requirements
-
-Implementation must provide a dedicated World Kernel interface.
-
-Minimum conceptual API:
-
-get_world()
-get_world_version()
-query_world()
-get_entity()
-get_relationship()
-get_state()
-get_world_view()
-propose_transition()
-validate_transition()
-commit_transition()
-create_snapshot()
-restore_snapshot()
-replay_events()
-reconstruct_world()
-detect_conflict()
-resolve_conflict()
-
-No external component should receive a generic:
-
-set_world_state(...)
-
-API without enforcing the complete transition contract.
-
-⸻
-
-23. Minimum Data Model
-
-Conceptual World object:
-
-World
-├── world_id
-├── version
-├── schema_version
-├── created_at
-├── updated_at
-├── entities
-├── relationships
-├── state
-├── temporal_state
-├── active_processes
-├── active_goals
-├── agents
-├── resources
-├── policies
-├── provenance
-└── integrity
-
-Conceptual World Transition:
-
-WorldTransition
-├── transition_id
-├── world_id
-├── previous_version
-├── resulting_version
-├── actor_id
-├── event_id
-├── action_id
-├── causation_id
-├── authorization_ref
-├── verification_ref
-├── timestamp
-├── delta
-├── preconditions
-├── postconditions
-├── provenance
-└── integrity
-
-⸻
-
-24. Revisit Conditions
-
-This ADR should be reconsidered only if one of the following becomes true:
-
-1. Veda adopts a fundamentally different World architecture.
-2. Multiple authoritative Worlds must coexist within one Veda instance.
-3. Distributed World consensus becomes a core requirement.
-4. World State ownership must be federated across independent authorities.
-5. Current World Kernel boundaries create a demonstrable scalability or correctness failure.
-6. A future architecture provides stronger guarantees while preserving the same authority invariants.
-
-If this decision changes, create a new ADR that supersedes this one.
-
-Do not silently edit this decision.
-
-⸻
-
-25. Architectural Rule
-
-The following rule is binding for Veda implementation:
-
-┌──────────────────────────────────────────┐
-│                 VEDA                     │
-│                                          │
-│  Brain → Thinks                          │
-│  Planner → Plans                         │
-│  Decision → Selects                      │
-│  Authorization → Permits                 │
-│  Capability → Enables                    │
-│  Tool → Executes                         │
-│  External System → Changes Reality       │
-│  Observation → Reports                   │
-│  Verification → Validates                │
-│  Chronicle → Records                     │
-│                                          │
-│  World Kernel → COMMITS WORLD STATE      │
-│                                          │
-└──────────────────────────────────────────┘
-
-Final Decision
-
-Veda World Kernel is the sole semantic authority responsible for committing authoritative Current World State.
-
-Everything else may observe, reason, propose, execute, verify, record, simulate, or learn, but no other subsystem may silently become the owner of the World.
-
-Status: ACCEPTED
+No subsequent architecture phase should begin until the current phase has been validated.
