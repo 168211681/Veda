@@ -31,10 +31,6 @@ This ADR does not define implementation-specific code or package layout.
 | Future implementation drift | SPEC documents |
 | Semantic ambiguity | ADR Governance |
 
-# Patch Instructions
-
-Append this header and governance sections to `ADR-0003.md`.
-
 ADR-0003: Evidence, Knowledge, Memory, and Experience Boundary
 
 * Status: Accepted
