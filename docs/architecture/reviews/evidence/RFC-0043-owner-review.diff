@@ -1,0 +1,369 @@
+diff --git a/docs/rfc/RFC-0043-world-delta-protocol.md b/docs/rfc/RFC-0043-world-delta-protocol.md
+index 691c91b..251c554 100644
+--- a/docs/rfc/RFC-0043-world-delta-protocol.md
++++ b/docs/rfc/RFC-0043-world-delta-protocol.md
+@@ -121,9 +121,20 @@ Delta
+ → Validate
+ → Reconcile
+ → Authorize where required
+-→ Apply
++→ Prepare Candidate against Exact Parent
++→ Execute
++→ Observe
++→ Evidence
+ → Verify
+-→ Commit
++→ Exact-parent Check
++→ World Kernel CAS Commit
++→ Post-commit Successful Outcome Delivery
++
++`Apply`/`APPLIED` in this RFC means only provisional application to a
++controlled candidate transition. It MUST NOT advance the canonical World
++version, represent successful external execution, imply verification success,
++create a `WORLD_COMMIT_RECEIPT`, or claim successful operation completion.
++External execution and its observation are separate factual records.
+ 
+ ⸻
+ 
+@@ -178,6 +189,12 @@ world_delta:
+   postconditions:
+   evidence_refs:
+   verification_refs:
++  candidate_transition_hash:
++  verification_receipt:
++    parent_world_version:
++    candidate_transition_hash:
++    evidence_set:
++    verification_policy_version:
+   intent_ref:
+   goal_ref:
+   action_ref:
+@@ -217,12 +234,23 @@ CONFLICTED
+ STALE
+ INVALID
+ UNAUTHORIZED
++DENIED
++FAILED
+ PARTIALLY_APPLIED
+ UNKNOWN
++INDETERMINATE
+ ROLLED_BACK
+ SUPERSEDED
+ EXPIRED
+ 
++Every failure path, including rejected, denied, conflicted, partially applied,
++indeterminate, and recovery-required attempts, MUST produce an immutable
++durable factual/audit record describing the actual result. Such a record MUST
++NOT claim successful completion, advance the canonical World version, or emit
++a successful outcome event. If required durable audit persistence fails, the
++operation MUST fail closed where mandated by the applicable authorization and
++audit contract.
++
+ ⸻
+ 
+ 7. Base World Version
+@@ -638,10 +666,17 @@ proposed transition
+ 
+ status = APPLIED
+ 
+-แต่ยังไม่เท่ากับ:
++ใน WDP `APPLIED` หมายถึง delta ถูกนำไปใช้กับ provisional candidate ภายใน
++controlled transition context เท่านั้น และยังไม่ใช่:
+ 
+ VERIFIED
+ 
++`APPLIED` MUST NOT advance the canonical World version, represent successful
++external execution, imply successful verification, create a
++`WORLD_COMMIT_RECEIPT`, or emit a successful outcome event. External execution,
++observation, failure, conflict, and recovery facts MUST be recorded separately
++as immutable factual/audit records.
++
+ ต้องผ่าน:
+ 
+ Verification Engine
+@@ -660,12 +695,41 @@ Preconditions satisfied
+ +
+ Conflict resolved
+ +
+-Application successful
++Candidate preparation is bound to the exact current parent
+++
++Execution and required observation completed
+++
++Verification requirements satisfied with a receipt bound to the exact parent,
++candidate transition hash, evidence set, and verification policy version
+ +
+-Verification requirements satisfied
++World Kernel compare-and-swap succeeds
+++
++World version, immutable `WORLD_COMMIT_RECEIPT`, and durable committed-event
++delivery intent become visible as one conceptual atomic unit
+ 
+ ตาม policy
+ 
++The World Kernel is the sole authority for authoritative World commitment.
++Every successful commit MUST make the following visible as one conceptual
++atomic unit, or make none visible:
++
++1. the resulting authoritative World version;
++2. an immutable `WORLD_COMMIT_RECEIPT`; and
++3. a durable committed-event delivery intent with a stable identity.
++
++The delivery intent is not a successful outcome event and does not prove that
++delivery has completed. A `DeltaCommitted` outcome MUST be materialized only
++after this atomic unit exists and MUST reference its receipt and resulting
++World version.
++
++Before CAS, the verification receipt MUST bind the exact current parent World
++version, candidate transition hash, evidence set, and verification policy
++version. If CAS detects a parent-version mismatch, the attempted commit MUST
++be rejected, the conflict MUST be durably recorded, and the prior verification
++MUST be treated as inapplicable. A retry MUST re-prepare against the current
++parent and obtain new verification; WDP MUST NOT silently rebase a verified
++candidate.
++
+ ⸻
+ 
+ 29. Conflict Detection
+@@ -1092,12 +1156,19 @@ DISPUTED
+ DeltaCreated
+ DeltaValidated
+ DeltaAuthorized
+-DeltaApplied
+-DeltaVerified
+-DeltaCommitted
++DeltaApplied (pre-commit factual record)
++DeltaVerified (pre-commit verification fact)
++DeltaCommitted (post-commit successful outcome only)
+ 
+ หรือ failure equivalent
+ 
++`DeltaCommitted` MUST reference the corresponding `WORLD_COMMIT_RECEIPT`,
++resulting World version, and stable committed-event delivery intent identifier.
++Factual-record persistence, Chronicle acknowledgement, and delivery intent are
++not themselves authoritative World commitment. Failed, rejected, denied,
++conflicted, partial, indeterminate, and recovery-required paths MUST produce
++durable truthful factual/audit records and MUST NOT emit `DeltaCommitted`.
++
+ ⸻
+ 
+ 52. Idempotency
+@@ -1362,6 +1433,14 @@ UNKNOWN
+ 
+ แล้ว resolve external state
+ 
++ระบบ MUST NOT blindly re-execute an uncertain external effect. It SHOULD
++inspect the external authority where possible and reconcile using the stable
++action/idempotency identity and available evidence. The result MUST be recorded
++as reconciled success, reconciled failure, or unresolved uncertainty. Fresh
++authorization and verification are required when the reconciliation changes the
++candidate or its applicability. WDP MUST NOT claim exactly-once external
++execution without a supporting external-system contract.
++
+ ⸻
+ 
+ 67. Tombstones
+@@ -1452,6 +1531,15 @@ delete D1
+ 
+ เพราะจะทำลาย history
+ 
++Rollback or compensation is a new corrective transition. It MUST follow
++Execution → Observation → Verification → Commit against the exact current
++parent. Only a corrective transition that passes verification and is committed
++by the World Kernel within the atomic World-version/receipt/delivery-intent
++unit may create a corrective `WORLD_COMMIT_RECEIPT` and post-commit successful
++outcome event. A failed, rejected, conflicted, or indeterminate correction
++MUST create truthful durable failure or `RECOVERY_REQUIRED` evidence and MUST
++NOT claim successful completion or emit a successful outcome event.
++
+ ⸻
+ 
+ 72. Compensation
+@@ -1474,17 +1562,25 @@ compensating delta
+ 
+ 73. Verification
+ 
+-หลัง commit:
++ก่อน authoritative commit:
+ 
+ Delta
+  ↓
+-Expected State
++Execution
+  ↓
+-External Observation
++Observation
++ ↓
++Expected State
+  ↓
+ Evidence
+  ↓
+ Verification
++ ↓
++Exact-parent Check
++ ↓
++World Kernel CAS Commit
++ ↓
++Post-commit Successful Outcome Event
+ 
+ ถ้า fail:
+ 
+@@ -1492,6 +1588,11 @@ VerificationFailed
+ 
+ → RFC-0027 Recovery
+ 
++Verification MUST precede authoritative World commitment. A verification
++receipt for a consequential transition MUST bind the exact parent World
++version, candidate transition hash, evidence set, and verification policy
++version. Verification alone authorizes no commit.
++
+ ⸻
+ 
+ 74. Delta Lifecycle
+@@ -1506,11 +1607,19 @@ AUTHORIZED
+    ↓
+ APPLYING
+    ↓
+-APPLIED
++APPLIED (provisional candidate only)
++   ↓
++EXECUTING
++   ↓
++OBSERVED
+    ↓
+ VERIFYING
+    ↓
+-COMMITTED
++VERIFIED
++   ↓
++WORLD KERNEL CAS COMMIT
++   ↓
++COMMITTED (atomic triple visible)
+ 
+ Failure:
+ 
+@@ -1519,8 +1628,12 @@ CONFLICTED
+ REJECTED
+ UNAUTHORIZED
+ INVALID
++DENIED
++FAILED
+ PARTIAL
+ UNKNOWN
++INDETERMINATE
++RECOVERY_REQUIRED
+ ROLLED_BACK
+ 
+ ⸻
+@@ -1579,13 +1692,23 @@ Conflict Detection
+       ↓
+ Semantic Validation
+       ↓
++Candidate Preparation against Exact Parent
++      ↓
+ Apply
+       ↓
++Execution
++      ↓
++Observation and Evidence
++      ↓
+ Postcondition Check
+       ↓
+ Verification
+       ↓
+-Commit
++Exact-parent Check
++      ↓
++World Kernel CAS Commit
++      ↓
++Post-commit Successful Outcome Delivery
+ 
+ ⸻
+ 
+@@ -1824,13 +1947,18 @@ DeltaCreated
+ DeltaValidated
+ DeltaAuthorized
+ DeltaConflictDetected
+-DeltaApplied
++DeltaApplied (pre-commit factual record)
+ DeltaVerificationStarted
+-DeltaVerified
+-DeltaCommitted
++DeltaVerified (pre-commit verification fact)
++DeltaCommitted (post-commit successful outcome only)
+ DeltaRejected
+ DeltaRolledBack
+ 
++`DeltaCommitted` MUST reference the immutable `WORLD_COMMIT_RECEIPT`, resulting
++World version, and stable committed-event delivery intent. The other records
++are historical facts and MUST NOT be interpreted as authoritative World
++commitment. Chronicle preserves history; it does not own the World commit.
++
+ ทำให้สามารถ:
+ 
+ reconstruct world
+@@ -2067,18 +2195,29 @@ World history ห้ามถูกเปลี่ยนแบบ silent เพ
+                     Apply
+                       │
+                       ▼
+-                  Verification
++                  Execution
++                      │
++                      ▼
++                 Observation
++                      │
++                      ▼
++                 Verification
+                       │
++                      ▼
++                 Exact-parent CAS
+              ┌────────┴────────┐
+              ▼                 ▼
+-          Commit             Reject
++       Atomic Commit          Reject
+              │
+              ▼
+-          World v+1
++       World v+1 + Receipt
++              │
++              ▼
++       Delivery Intent
+              │
+       ┌──────┼────────┐
+       ▼      ▼        ▼
+-   NCP      Brain   Chronicle
++   NCP   Outcome Event Chronicle
+ 
+ ⸻
+ 
+@@ -2149,11 +2288,21 @@ Validation
+    ↓
+ Conflict / Authority Check
+    ↓
+-Apply
++Candidate Preparation against Exact Parent
++   ↓
++Execution
++   ↓
++Observation
++   ↓
++Evidence
+    ↓
+ Verification
+    ↓
+-Committed World
++Exact-parent CAS Commit
++   ↓
++World version + WORLD_COMMIT_RECEIPT + Delivery Intent
++   ↓
++Post-commit Successful Outcome Event
+    ↓
+ NCP Context Update
+    ↓
+@@ -2181,4 +2330,4 @@ according to the system's verification policy.
+ 
+ หรือสั้นที่สุด:
+ 
+-WDP ทำให้ Veda เปลี่ยนโลกอย่างมีร่องรอย ไม่ใช่แค่เขียนทับโลกแล้วหวังว่า log จะจำได้ว่าเกิดอะไรขึ้น
+\ No newline at end of file
++WDP ทำให้ Veda เปลี่ยนโลกอย่างมีร่องรอย ไม่ใช่แค่เขียนทับโลกแล้วหวังว่า log จะจำได้ว่าเกิดอะไรขึ้น
