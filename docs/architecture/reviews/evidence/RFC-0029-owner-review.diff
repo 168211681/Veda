@@ -1,0 +1,243 @@
+diff --git a/docs/rfc/RFC-0029-external-world-interface.md b/docs/rfc/RFC-0029-external-world-interface.md
+index 4085c32..10e504d 100644
+--- a/docs/rfc/RFC-0029-external-world-interface.md
++++ b/docs/rfc/RFC-0029-external-world-interface.md
+@@ -109,10 +109,16 @@ Evidence
+  ↓
+ Verification
+  ↓
+-World Update
++Submit verified candidate to World Kernel
+ 
+ This separation is consistent with modern agent architectures that place the runtime between model proposals and real tool execution. (Gturitto)
+ 
++The External World Interface and its adapters MAY request or execute permitted
++external operations, observe external effects, and preserve evidence. They MAY
++submit a verified candidate for World Kernel review, but MUST NOT independently
++mutate or commit authoritative modeled World State. Only the World Kernel may
++perform the authoritative CAS commit.
++
+ ⸻
+ 
+ 4. Goals
+@@ -629,6 +635,21 @@ until external state is verified.
+ 
+ ⸻
+ 
++For an UNKNOWN, TIMEOUT or indeterminate external effect, Veda MUST preserve
++the stable action/idempotency identity and MUST reconcile against the external
++authority where possible before any consequential retry. Veda MUST NOT infer
++success from request acceptance, blindly re-execute an effect that may already
++have occurred, or claim exactly-once external execution without an explicit
++external-system guarantee.
++
++Before a consequential modeled-World commit, a parent World-version mismatch
++MUST reject the stale attempt. A VerificationReceipt bound to the old parent
++becomes inapplicable; retry or merge MUST prepare a new candidate against the
++current parent, obtain fresh verification, and revalidate authorization where
++required by policy. Reconciliation does not bypass these gates.
++
++⸻
++
+ 26. No Blind Retry
+ 
+ If external state is UNKNOWN:
+@@ -872,10 +893,14 @@ Event Normalization
+  ↓
+ RFC-0003 Event Model
+  ↓
+-World Update
++Pre-commit factual record / World Kernel candidate
+ 
+ subject to verification rules.
+ 
++External event persistence or normalization does not commit the modeled World.
++After the applicable verification and exact-parent checks, only the World
++Kernel may commit the authoritative transition.
++
+ ⸻
+ 
+ 37. External Events Are Not Automatically Trusted
+@@ -1166,6 +1191,21 @@ A receipt proves what the interface reported, not necessarily the complete exter
+ 
+ This distinction is important because external execution evidence and actual downstream world state can diverge. (Agoragentic)
+ 
++`COMMITTED` in `ExternalTransaction` and an external commit receipt refer only
++to durability reported by the external system. They MUST NOT be equated with
++`WORLD_COMMIT_RECEIPT`, which exists only after a successful World Kernel
++atomic commit. An external receipt is evidence for verification, not proof of
++Veda's modeled-World commitment.
++
++The external system supplies only facts it can know and report. Veda MAY keep a
++separate linkage record correlating that evidence with its stable action or
++idempotency identity, candidate transition hash and exact parent World version
++when consequential, evidence-set references, and a VerificationReceipt or
++`WORLD_COMMIT_RECEIPT` reference when those later records exist. These are
++Veda-owned linkage metadata and MUST NOT be fabricated as provider evidence.
++The original external receipt MUST NOT require a VerificationReceipt reference
++that can exist only after the receipt is observed.
++
+ ⸻
+ 
+ 52. External State Verification
+@@ -1708,6 +1748,15 @@ keep 70
+ reconcile
+ human review
+ 
++Failed, rejected, partial, UNKNOWN, indeterminate and recovery-required
++external effects MUST retain truthful durable factual evidence linked to the
++stable attempted-action identity. They MUST NOT emit a successful modeled-World
++outcome without a successful World Kernel commit. Compensation is a separately
++authorized, observable and verifiable corrective action; it does not erase or
++rewrite the prior external history, and an irreversible effect MUST NOT be
++described as transactionally undone unless the external system proves that
++property.
++
+ ⸻
+ 
+ 78. External Concurrency
+@@ -1878,7 +1927,28 @@ EffectReceipt {
+     integrity
+ }
+ 
+-The receipt enters RFC-0026 as evidence.
++The provider-supplied EffectReceipt enters RFC-0026 as evidence. Veda MAY
++maintain a separate linkage record for stable action identity, consequential
++candidate/parent context, evidence references, and later verification or World
++commit references. Missing provider data remains UNKNOWN and is not invented.
++
++An internal linkage record MAY use:
++
++ExternalEffectLinkage {
++    stable_action_id
++    external_receipt_ref
++    candidate_transition_hash
++    parent_world_version
++    evidence_refs[]
++    verification_receipt_ref
++    world_commit_receipt_ref
++}
++
++For a consequential transition, Veda MUST preserve the stable action identity,
++candidate transition hash and exact-parent context in this Veda-owned linkage.
++If that context is not yet available, the linkage remains pending and MUST NOT
++authorize a modeled-World commit. Verification and World commit references are
++added only after those records exist.
+ 
+ ⸻
+ 
+@@ -1939,7 +2009,32 @@ EVIDENCE
+       ↓
+ VERIFICATION
+       ↓
+-WORLD UPDATE
++VERIFICATION RECEIPT
++      ↓
++EXACT-PARENT APPLICABILITY CHECK
++      ↓
++WORLD KERNEL CAS ATOMIC COMMIT
++      ↓
++POST-COMMIT SUCCESSFUL OUTCOME DELIVERY
++
++For a consequential modeled-World transition, the canonical order is:
++
++Authorization → External Execution → Observation or Reconciliation → Evidence
++→ Verification → VerificationReceipt → Exact-parent applicability check
++→ World Kernel CAS atomic commit → Post-commit successful outcome delivery.
++
++The World Kernel MUST atomically expose all three of the following, or none:
++
++1. the resulting authoritative World version;
++2. the immutable `WORLD_COMMIT_RECEIPT`; and
++3. the durable committed-event delivery intent.
++
++CAS and this atomic triple are one commit boundary. The delivery intent is
++created inside that boundary, and actual outcome delivery happens afterward.
++`VerificationReceipt`, `EffectReceipt`, external `COMMITTED`, Chronicle
++projection and event persistence are not substitutes for `WORLD_COMMIT_RECEIPT`.
++This contract does not claim transactional atomicity across an external system
++and Veda's internal World Kernel.
+ 
+ ⸻
+ 
+@@ -1985,7 +2080,7 @@ OBSERVATION
+  ↓
+ VERIFICATION
+  ↓
+-WORLD UPDATE
++Submit verified candidate to World Kernel
+ 
+ ⸻
+ 
+@@ -2125,10 +2220,18 @@ External Observation
+  ↓
+ Verification
+  ↓
+-World Update
++Pre-commit factual record
++ ↓
++World Kernel atomic commit
++ ↓
++Post-commit successful outcome delivery
+ 
+ This creates a complete external-effect history.
+ 
++Chronicle preserves the durable history of these facts and outcomes but does
++not own authoritative current modeled World State. Event persistence, delivery
++or historical projection MUST NOT independently confer World commit authority.
++
+ ⸻
+ 
+ 96. External Interface and Recovery
+@@ -2215,7 +2318,12 @@ For high-risk physical or social effects:
+ 
+ Human approval
+ 
+-may become the final commit boundary.
++is an authorization and permission gate for the relevant external effect. It
++may approve, deny or require review before execution, but it is not an
++alternative authority for committing Veda's authoritative modeled World State.
++Only the World Kernel performs the modeled-World CAS commitment. A World
++Kernel commit also MUST NOT grant permission to perform an external action that
++the applicable human or policy authority denied.
+ 
+ ⸻
+ 
+@@ -2421,6 +2529,30 @@ EXT-30
+ 
+ No external effect may be considered verified solely because Veda intended it.
+ 
++EXT-31
++
++An external commit state or external receipt MUST NOT be treated as a
++`WORLD_COMMIT_RECEIPT`.
++
++EXT-32
++
++Only the World Kernel may commit authoritative modeled World State.
++
++EXT-33
++
++A consequential retry MUST use a candidate and VerificationReceipt applicable
++to the exact current parent World version.
++
++EXT-34
++
++Pre-commit factual records, the World Kernel atomic commit and post-commit
++successful outcomes MUST remain distinguishable.
++
++EXT-35
++
++Failed, partial, UNKNOWN, indeterminate and recovery-required effects MUST
++retain truthful durable evidence linked to the attempted action.
++
+ ⸻
+ 
+ 106. Architecture
+@@ -2495,4 +2627,4 @@ Update World
+ 
+ The critical rule is:
+ 
+-Veda must never confuse a successful request with a successful change in reality.
+\ No newline at end of file
++Veda must never confuse a successful request with a successful change in reality.
