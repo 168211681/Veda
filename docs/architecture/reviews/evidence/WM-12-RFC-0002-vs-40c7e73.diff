@@ -1,0 +1,480 @@
+diff --git a/docs/rfc/RFC-0002-world-model.md b/docs/rfc/RFC-0002-world-model.md
+index a7a6ca066096f580426ca4eb60c42c7f137f2211..e3a7bd1bbb1d7a4d37863bdd333afb2d8052760d 100644
+--- a/docs/rfc/RFC-0002-world-model.md
++++ b/docs/rfc/RFC-0002-world-model.md
+@@ -6,7 +6,7 @@ Title: Veda World Model
+.
+.Status: Draft
+.
+-Version: 0.1.0
++Version: 0.2.0-proposed
+.
+.Category: Core / Ontology / Runtime
+.
+@@ -16,15 +16,15 @@ Depends on: RFC-0001, RFC-0001A
+.
+.Abstract
+.
+-The Veda World Model defines how Veda represents reality.
++The Veda World Model defines how Veda represents its modeled context of reality.
+.
+.Unlike traditional operating systems that organize computation around files, processes, windows, and applications, Veda organizes computation around World State.
+.
+-Everything Veda knows, remembers, predicts, observes, plans, verifies, or modifies exists inside a unified World.
++The World provides shared modeled identities, relationships, state references, time, and provenance across Veda. Domain systems such as Knowledge, Memory, Planning, Authorization, and external systems of record retain ownership of their own semantics and authoritative data. Referencing an object in the World does not transfer that ownership to the World Kernel.
+.
+.This RFC defines:
+.
+-* the primitives of reality,
++* the primitives of modeled World State,
+.* entity identity,
+.* relationships,
+.* state transitions,
+@@ -63,16 +63,16 @@ Design Goals
+.
+.The World Model MUST satisfy the following goals.
+.
+-1. Represent physical and digital reality together.
+-2. Every object has a persistent identity.
+-3. Reality evolves through events.
++1. Represent modeled physical and digital context together without claiming ownership of external reality.
++2. Every modeled object has a stable Veda identity and may reference separate external identities.
++3. Model changes from validated transition inputs without granting events commit authority.
+.4. Time is first-class.
+.5. Evidence is attached to knowledge.
+.6. Every change is traceable.
+.7. World history is replayable.
+.8. Multiple agents share compatible reality.
+.9. World can be simulated.
+-10. World supports rollback and branching.
++10. World supports traceable recovery to a new version and isolated non-authoritative branching.
+.
+.⸻
+.
+@@ -132,11 +132,11 @@ state:
+.  battery: 0.91
+.  build_status: PASS
+.
+-State is mutable.
++Authoritative modeled State evolves only through a World Kernel committed transition.
+.
+.⸻
+.
+-Primitive D — Event
++Primitive D — Event Reference
+.
+.Something happened.
+.
+@@ -148,7 +148,7 @@ Examples:
+.* Model loaded.
+.* Book imported.
+.
+-Events change state.
++Events record occurrences and may provide inputs to a proposed transition. Events do not self-authorize or directly mutate authoritative World State. Only the World Kernel may commit an authoritative modeled transition, subject to the applicable authorization and verification requirements. RFC-0003 owns the detailed event contract and lifecycle; RFC-0004 owns transition semantics.
+.
+.⸻
+.
+@@ -167,9 +167,9 @@ Time supports:
+.
+.⸻
+.
+-Primitive F — Evidence
++Primitive F — Evidence Reference
+.
+-Evidence explains why Veda believes something.
++Evidence references explain why a modeled claim is supported or challenged. RFC-0012 owns evidence schemas, evaluation, status, and lifecycle.
+.
+.Example:
+.
+@@ -179,9 +179,9 @@ evidence:
+.
+.⸻
+.
+-Primitive G — Causality
++Primitive G — Causal Claim Reference
+.
+-Events may cause future events.
++Veda may represent a supported causal claim or hypothesis between events, states, or conditions.
+.
+.Example:
+.
+@@ -189,7 +189,7 @@ Disk Full
+.    ↓
+.Build Failed
+.
+-Correlation and causation are different.
++Correlation and causation are different. A confidence value is not proof of causation, and causal claims MUST preserve evidence, uncertainty, and alternative hypotheses. RFC-0022 owns the detailed causal model.
+.
+.⸻
+.
+@@ -207,7 +207,7 @@ World
+.├── Causality
+.└── Integrity Rules
+.
+-Everything belongs somewhere inside this ontology.
++This ontology is a shared modeled context and reference layer. It does not absorb the ownership or lifecycle rules of Knowledge, Memory, Planning, Authorization, Evidence, Events, or external systems.
+.
+.⸻
+.
+@@ -215,7 +215,7 @@ Chapter 3 — Entity System
+.
+.Entity Identity
+.
+-Every entity receives a globally unique identifier.
++Every modeled entity receives a stable identifier unique within a declared Veda namespace.
+.
+.Example:
+.
+@@ -223,15 +223,17 @@ entity:
+.  id: ent_project_veda
+.  type: Project
+.
+-Identity NEVER changes.
++The Veda identity is immutable for the lifetime of that modeled entity.
+.
+.Names may change.
+.
++External identities MUST be represented separately as namespaced references, such as a repository ID owned by GitHub or a resource ID owned by a cloud provider. Veda MUST NOT rewrite or claim ownership of those external identifiers. Identity equivalence across namespaces MUST be explicit and evidence-backed.
++
+.⸻
+.
+.Entity Types
+.
+-Core categories include:
++Core modeled categories may include:
+.
+.* Human
+.* Organization
+@@ -245,11 +247,11 @@ Core categories include:
+.* Repository
+.* Document
+.* Book
+-* Memory
+-* Knowledge
++* Memory Reference
++* Knowledge Reference
+.* Task
+.* Goal
+-* Event
++* Event Reference
+.* Capability
+.* Policy
+.* World
+@@ -353,30 +355,34 @@ State Categories
+.* Physical
+.* Logical
+.* Security
+-* Knowledge
+-* Planning
+-* Memory
++* Knowledge Reference
++* Planning Reference
++* Memory Reference
+.
+-Each subsystem defines additional states.
++Each domain subsystem defines and owns its additional state semantics. A World reference to domain state is not an authoritative replacement for the owning domain record.
+.
+.⸻
+.
+.State Snapshot
+.
+-The World Engine may snapshot world state.
++The World Kernel may create or adopt snapshots of modeled World State according to an approved transition and persistence policy.
+.
+.Snapshots enable:
+.
+-* rollback
++* recovery to a new canonical version derived from a prior valid state
+.* replay
+.* debugging
+-* simulation
++* isolated simulation
++
++A snapshot is a derived optimization, not historical authority. Recovery or rollback MUST create a traceable transition and MUST NOT erase immutable history or imply that an external-world effect has been undone. Simulation snapshots and branches are non-authoritative unless a separately authorized, verified transition is committed by the World Kernel.
+.
+.⸻
+.
+-Chapter 6 — Event Model
++Chapter 6 — World Event References
++
++This chapter defines only the World Model's dependency on event references. RFC-0003 defines event envelopes, categories, ordering, and lifecycle. RFC-0031 and RFC-0032 define audit/event trace and Chronicle concerns where approved.
+.
+-Events are append-only.
++Committed World event references are append-only.
+.
+.Example:
+.
+@@ -390,7 +396,7 @@ Events NEVER mutate history.
+.
+.⸻
+.
+-Event Categories
++Illustrative Event Categories
+.
+.* Observation
+.* Action
+@@ -405,7 +411,7 @@ Event Categories
+.
+.⸻
+.
+-Event Ordering
++Event Reference Ordering
+.
+.Events have:
+.
+@@ -415,7 +421,9 @@ Events have:
+.* parent event
+.* causal event
+.
+-Ordering MUST be deterministic.
++Ordering used to derive an authoritative World projection MUST be deterministic or must produce an explicit conflict. Consequential failed executions, denied proposals, rejected transitions, and recovery attempts MUST remain durably auditable; they MUST NOT be represented as successful state changes.
++
++A truthful pre-commit factual record MAY be durably persisted only after the fact it represents has occurred. Such a record MAY describe authorization, denial, execution, observation, verification, rejection, conflict, failure, or recovery, but it MUST NOT claim successful World commitment, authorize mutation, or advance authoritative modeled World State. A successful outcome event MUST be created only after the corresponding authoritative World commit and MUST reference its `WORLD_COMMIT_RECEIPT` and resulting World version.
+.
+.⸻
+.
+@@ -448,11 +456,13 @@ World supports temporal reasoning.
+.
+.⸻
+.
+-Chapter 8 — Evidence Layer
++Chapter 8 — Evidence References
++
++This chapter requires World claims and transitions to retain evidence references. RFC-0012 owns evidence fields, classes, quality evaluation, and lifecycle; RFC-0013 owns claim and knowledge semantics.
+.
+.Evidence attaches support to claims.
+.
+-Evidence includes:
++An evidence reference identifies evidence that may include:
+.
+.* source
+.* timestamp
+@@ -477,9 +487,9 @@ Evidence quality differs by source.
+.
+.⸻
+.
+-Truth Status
++Epistemic Status Reference
+.
+-Every claim has status.
++Modeled claims MUST preserve their epistemic status as defined by the owning claim, evidence, and knowledge contracts.
+.
+.* Verified
+.* Observed
+@@ -488,7 +498,7 @@ Every claim has status.
+.* Unknown
+.* Contradicted
+.
+-Status is mutable through new evidence.
++Observed, Verified, Inferred, Predicted, Unknown, Stale, and Contradicted MUST NOT be collapsed into a generic truth flag. New evidence may cause reevaluation through the owning domain lifecycle; it MUST NOT silently overwrite contradictory history.
+.
+.⸻
+.
+@@ -519,17 +529,17 @@ world_version:
+.  parent: W10481
+.  timestamp:
+.
+-World versions form a chain.
++Authoritative World versions form one canonical lineage. A root version has no parent; every later canonical version references its canonical parent. Isolated simulations and counterfactuals may branch from a version, but those branches are explicitly non-authoritative and MUST NOT overwrite or be confused with the canonical lineage.
+.
+.⸻
+.
+.Replay
+.
+-Given events:
++Given canonical World commit receipts and their bound inputs:
+.
+-World0 + Events = WorldN
++World0 + Receipts + Bound Inputs = WorldN
+.
+-Replay reconstructs reality.
++Replay reconstructs modeled World State to the extent permitted by retained events, evidence references, snapshots, schemas, and deterministic transition rules. Replay MUST preserve provenance and surface missing, stale, contradictory, or unverifiable information as explicit limitations. Replay never reconstructs or rewrites external reality.
+.
+.⸻
+.
+@@ -586,7 +596,7 @@ Fields:
+.* evidence
+.* confidence
+.
+-Causal edges are distinct from relationships.
++Causal edges are distinct from ordinary relationships. They are evidence-linked claims or hypotheses, not guaranteed facts. Detailed causal strength, confidence semantics, alternative hypotheses, and lifecycle are defined by RFC-0022.
+.
+.⸻
+.
+@@ -596,7 +606,7 @@ Future engine may ask:
+.
+.What if Event A never happened?
+.
+-World Model supports alternative histories.
++The World Model supports isolated, non-authoritative alternative histories. A simulation result cannot become canonical merely because it exists or has high confidence.
+.
+.⸻
+.
+@@ -649,7 +659,7 @@ World consistency rules.
+.
+.Rule W1
+.
+-Every entity MUST have exactly one immutable ID.
++Every modeled entity MUST have exactly one immutable Veda ID within a declared namespace. External identities MUST remain separate, namespaced references.
+.
+.⸻
+.
+@@ -667,13 +677,23 @@ Events MUST NOT mutate history.
+.
+.Rule W4
+.
+-State changes MUST originate from events.
++Only the World Kernel may commit an authoritative modeled state transition. An event or other transition input MUST NOT self-authorize or directly mutate authoritative World State. Every committed transition MUST be traceable to its validated inputs, applicable authorization, verification outcome, and durable audit evidence.
++
++The World Kernel commit boundary MUST make the following visible as one conceptual atomic unit:
++
++1. the new authoritative World version;
++2. its immutable `WORLD_COMMIT_RECEIPT`; and
++3. a durable committed-event delivery intent.
++
++The unit MUST become visible in full or not at all. The receipt MUST bind the exact parent World version, candidate transition hash, evidence set, verification policy version, applicable authorization and verification references, resulting World version, and delivery intent identifier. The delivery intent is not itself a successful outcome event and MUST NOT be interpreted as proof of downstream delivery.
++
++If compare-and-swap detects that the bound parent World version is no longer current, the prior verification receipt is inapplicable to the new parent. The attempted transition MUST NOT commit. The conflict MUST remain durably auditable, and any retry MUST re-prepare the candidate against the current parent and obtain new verification before a new commit attempt.
+.
+.⸻
+.
+.Rule W5
+.
+-Every world version MUST reference its parent.
++Every non-root canonical world version MUST reference exactly one canonical parent. Simulation branches MUST identify their branch and base version and remain non-authoritative.
+.
+.⸻
+.
+@@ -703,15 +723,15 @@ Time ordering MUST remain deterministic.
+.
+.Rule W10
+.
+-World integrity violations MUST generate security events.
++Every World integrity violation MUST generate an integrity/audit record. It MUST also be classified as a security event when the violation has security implications; integrity failure alone does not imply a security incident.
+.
+.⸻
+.
+-Reference World Object
++World Read and Commit Boundaries
+.
+-Conceptual structure:
++Conceptual read projection:
+.
+-world:
++world_projection:
+.  version:
+.  entities:
+.  relationships:
+@@ -720,7 +740,9 @@ world:
+.  evidence:
+.  causality:
+.
+-Every subsystem reads from this object.
++Subsystems read through bounded World Query, snapshot, or projection contracts appropriate to their authorization and consistency needs. These are conceptual boundaries, not concrete API endpoints.
++
++No shared projection grants mutation authority. All authoritative writes pass through the single controlled World Kernel commit boundary; cached, derived, observed, predicted, hypothetical, and simulated views MUST be distinguishable from authoritative current modeled World State.
+.
+.⸻
+.
+@@ -744,22 +766,29 @@ Intent
+.Goals
+.Knowledge
+.
+-Applications become views of the world rather than owners of data.
++Applications may provide views of modeled context without becoming owners of data held by the World Kernel, domain systems, or external systems of record.
+.
+.⸻
+.
+.Conformance Requirements
+.
+-A subsystem conforms to RFC-0002 only if it:
++A subsystem conforms to RFC-0002 only if evidence demonstrates that it:
+.
+-1. Uses immutable entity IDs.
+-2. Records state changes through events.
+-3. Supports temporal queries.
+-4. Preserves world history.
+-5. Maintains evidence provenance.
+-6. Produces deterministic world versions.
+-7. Supports replay from event history.
+-8. Preserves integrity rules.
++1. Uses immutable namespaced Veda entity IDs and keeps external identities separate.
++2. Prevents direct authoritative mutation outside the World Kernel commit boundary.
++3. Rejects event, Brain, Tool, model, and simulation inputs as self-authorizing writes.
++4. Exposes bounded read projections that distinguish authoritative, derived, cached, observed, predicted, and hypothetical data.
++5. Supports temporal queries without treating old, stale, unknown, or contradictory data as current verified state.
++6. Preserves canonical version lineage and immutable historical references; recovery creates a new traceable version.
++7. Keeps simulation and counterfactual branches isolated from the canonical lineage.
++8. Maintains evidence and provenance references while delegating evidence lifecycle to RFC-0012.
++9. Replays modeled World State deterministically from valid World commit receipts and their bound inputs when those inputs permit, and reports explicit limitations when they do not.
++10. Produces audit records for committed, rejected, failed, and recovery paths as required, without falsely reporting unsuccessful work as a state change.
++11. Records every integrity violation and security-classifies only those with security implications.
++12. Preserves external systems as authoritative for their own external state.
++13. Atomically makes visible the World version, `WORLD_COMMIT_RECEIPT`, and committed-event delivery intent for every authoritative World commit.
++14. Binds verification to the exact parent World version, candidate transition hash, evidence set, and verification policy version, and rejects stale verification after a parent-version conflict.
++15. Delivers post-commit successful outcome events idempotently from the durable delivery intent and treats duplicate delivery as delivery replay, not duplicate World execution.
+.
+.⸻
+.
+@@ -778,8 +807,59 @@ RFC-0002 enables:
+.
+.⸻
+.
++Authority and Traceability
++
++Normative authority chain for this proposed revision:
++
++* `docs/architecture/ARCHITECTURE_CONSTITUTION.md`: World Kernel authority, one owner per authoritative state, verification, auditability, and no silent mutation.
++* RFC-0001 and RFC-0001A: upstream constitutional and permission constraints; both remain Draft and therefore block RFC Freeze evidence.
++* RFC-0003: detailed event semantics and durable event lifecycle.
++* RFC-0004: detailed state-transition semantics.
++* RFC-0012: detailed Evidence model.
++* RFC-0013: detailed claim and Knowledge model.
++* RFC-0017: detailed Memory model.
++* RFC-0022: detailed Causal model.
++* ADR-0001: downstream World Kernel decision candidate. Its accepted status does not replace the required upstream RFC validation and owner approval.
++
++For this proposed Draft normalization, the canonical ordering is:
++
++1. persist applicable proposal, authorization, or denial facts after they occur;
++2. prepare a candidate transition against an exact parent World version;
++3. execute applicable external or internal work and persist the execution fact;
++4. observe the actual result and persist the observation fact;
++5. verify the candidate outcome, persist the verification fact, and bind its receipt to the parent version, candidate hash, evidence set, and verification policy version;
++6. let only the World Kernel atomically make visible the new World version, `WORLD_COMMIT_RECEIPT`, and committed-event delivery intent;
++7. materialize and idempotently deliver a post-commit successful outcome event that references the receipt; and
++8. project the event into Chronicle and other audit/read projections without granting those projections World mutation authority.
++
++This ordering is an owner-directed design direction for Draft RFC normalization, not acceptance of this RFC. WM-12 remains open and RFC Freeze remains blocked pending complete cross-document validation, independent audit evidence, and the required governance review.
++
++⸻
++
++Proposed Semantic Change Summary
++
++Compared with Draft v0.1.0, this owner-directed Draft normalization proposal:
++
++1. limits World scope to modeled context and preserves domain/external ownership;
++2. makes the World Kernel the sole authoritative commit owner;
++3. changes replay from reconstructing reality to reconstructing modeled World State with explicit limitations;
++4. separates canonical lineage from isolated simulation branches;
++5. replaces a universal shared mutable object with bounded read projections and one commit boundary;
++6. separates Veda identity from namespaced external identity;
++7. treats causality as an evidence-linked claim or hypothesis;
++8. delegates detailed Evidence and Event contracts to RFC-0012 and RFC-0003;
++9. distinguishes integrity audit records from security classification; and
++10. adds testable conformance and traceability requirements;
++11. distinguishes truthful pre-commit factual records from post-commit successful outcome events;
++12. defines the conceptual atomic World commit unit as World version plus `WORLD_COMMIT_RECEIPT` plus committed-event delivery intent; and
++13. makes verification parent-specific and requires re-preparation and re-verification after a parent-version conflict.
++
++This change summary records proposed Draft RFC text implementing the owner-approved design direction. It does not assert approval of this RFC text, RFC acceptance, completion of RFC Freeze, or closure of WM-12.
++
++⸻
++
+.Status
+.
+-Draft v0.1.0
++Draft v0.2.0-proposed
+.
+-The World Model is the foundational ontology of Project Veda. All future runtime, memory, planner, agent, simulation, and operating-system components MUST share this representation of reality.
++The World Model is the foundational shared modeled-context ontology of Project Veda. Future components MUST interoperate through its identity, reference, provenance, read, and controlled-commit boundaries without surrendering their own domain authority or treating modeled World State as external reality.

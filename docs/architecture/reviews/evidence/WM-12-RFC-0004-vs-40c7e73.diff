@@ -1,0 +1,461 @@
+diff --git a/docs/rfc/RFC-0004-state-and-world-transition.md b/docs/rfc/RFC-0004-state-and-world-transition.md
+index ea654dcbe69811b3fee9d2e4e8992eaeca712edd..748f428403d813f341d5dd8da072d6083d5aabc8 100644
+--- a/docs/rfc/RFC-0004-state-and-world-transition.md
++++ b/docs/rfc/RFC-0004-state-and-world-transition.md
+@@ -3,7 +3,7 @@ RFC-0004 — Veda State & World Transition
+.RFC: RFC-0004
+.Title: Veda State & World Transition
+.Status: Draft
+-Version: 0.1.0
++Version: 0.2.0-proposed
+.Category: Core / Runtime / State Management
+.Depends on: RFC-0001, RFC-0001A, RFC-0002, RFC-0003
+.
+@@ -23,13 +23,15 @@ The fundamental operation is:
+.
+.World(t)
+.   +
+-Event
++Validated Factual Inputs + Authorization
+.   ↓
+-Validation
++Prepare Candidate against Exact Parent
+.   ↓
+-Transition
++Execution → Observation → Verification
+.   ↓
+-World(t+1)
++World Kernel Atomic Commit
++   ↓
++World(t+1) + WORLD_COMMIT_RECEIPT + Delivery Intent
+.
+.This document defines:
+.
+@@ -56,7 +58,7 @@ A World Model without a formal transition system has no reliable mechanism for c
+.
+.Veda must be able to answer:
+.
+-Given the current World and an Event, what exactly changes?
++Given the current World, validated factual inputs, authorization, and verification, what exactly changes?
+.
+.The transition engine provides this answer.
+.
+@@ -70,19 +72,17 @@ Directly modify World
+.
+.Required:
+.
+-Agent
++Agent → Action → Authorization
+. ↓
+-Action
++Validated Factual Inputs
+. ↓
+-Event
+- ↓
+-Transition Validation
++Prepare Candidate at Exact Parent
+. ↓
+-World Transition
++Execution → Observation → Verification
+. ↓
+-Verification
++World Kernel Atomic Commit
+. ↓
+-Commit
++Post-Commit Successful Outcome Event
+.
+.⸻
+.
+@@ -90,12 +90,13 @@ Commit
+.
+.The canonical transition is:
+.
+-W(t+1) = T(W(t), E)
++W(t+1) = T(W(t), I, V)
+.
+.Where:
+.
+.* W(t) = current World.
+-* E = committed Event.
++* I = validated factual inputs, applicable authorization, and candidate transition.
++* V = verification receipt bound to the exact parent, candidate hash, evidence set, and verification policy version.
+.* T = deterministic transition function.
+.* W(t+1) = resulting World.
+.
+@@ -109,7 +110,7 @@ The authoritative World MUST remain unchanged.
+.
+.3. Transition Pipeline
+.
+-Event
++Validated Inputs
+. ↓
+.Schema Validation
+. ↓
+@@ -121,13 +122,19 @@ Precondition Check
+. ↓
+.Invariant Check
+. ↓
+-State Transition
++Candidate Transition Preparation
++ ↓
++Execution
++ ↓
++Observation
+. ↓
+.Postcondition Check
+. ↓
+.Verification
+. ↓
+-Commit
++World Kernel Atomic Commit
++ ↓
++Successful Outcome Event
+.
+.A transition MUST NOT be committed if a required validation fails.
+.
+@@ -169,9 +176,9 @@ Therefore:
+.
+.State ≠ Event History
+.
+-The Event Store remains authoritative for historical reconstruction.
++Chronicle remains authoritative for immutable historical facts and receipts.
+.
+-The World State is a derived representation.
++The World Kernel remains authoritative for current modeled World State. Replay derives a state projection only from valid World commit receipts and their bound inputs, not from every historical fact.
+.
+.⸻
+.
+@@ -179,13 +186,14 @@ The World State is a derived representation.
+.
+.Conceptual implementation:
+.
+-def transition(world, event):
+-    validate_event(event)
+-    validate_authorization(event)
+-    validate_preconditions(world, event)
+-    validate_invariants(world, event)
+-    next_world = apply_event(world, event)
+-    validate_postconditions(next_world, event)
++def transition(world, inputs, verification):
++    validate_inputs(inputs)
++    validate_authorization(inputs)
++    validate_preconditions(world, inputs)
++    validate_invariants(world, inputs)
++    validate_verification_binding(world.version, inputs, verification)
++    next_world = apply_candidate(world, inputs)
++    validate_postconditions(next_world, inputs)
+.    return next_world
+.
+.The function MUST be deterministic for authoritative replay.
+@@ -258,7 +266,7 @@ ROLLED_BACK
+.
+.11. State Mutation Rules
+.
+-Only the World Transition Engine may commit authoritative World state.
++Only the World Kernel may commit authoritative modeled World State. A Transition Engine may prepare, validate, and apply a candidate within the controlled boundary, but it has no independent commit authority.
+.
+.Forbidden:
+.
+@@ -268,10 +276,12 @@ Tool → World Mutation
+.
+.Required:
+.
+-Event
++Validated Inputs
+. ↓
+.Transition Engine
+. ↓
++World Kernel Commit Boundary
++ ↓
+.World State
+.
+.⸻
+@@ -398,7 +408,13 @@ Before commit, the state is provisional.
+.
+.18. Atomicity
+.
+-A logical transaction SHOULD be atomic.
++A World commit MUST make the following visible as one conceptual atomic unit:
++
++1. the new authoritative World version;
++2. an immutable `WORLD_COMMIT_RECEIPT`; and
++3. a durable committed-event delivery intent.
++
++All three become visible or none do. A broader logical transaction SHOULD be atomic where technically possible.
+.
+.Example:
+.
+@@ -461,13 +477,13 @@ Example:
+.Action A
+.idempotency_key = github_push:commit123
+.
+-If the same action is submitted twice, Veda SHOULD detect the duplicate.
++If the same action is submitted twice, Veda MUST detect the duplicate when consequential effects are possible. Re-delivery of a committed-event intent MUST NOT re-execute the transition.
+.
+.⸻
+.
+.21. Rollback
+.
+-Rollback returns the World to a previous valid state where technically possible.
++Rollback creates a new corrective World version whose modeled contents restore a previous valid condition where technically possible.
+.
+.W100
+. ↓
+@@ -479,9 +495,9 @@ Failure
+. ↓
+.Rollback
+. ↓
+-W101
++W103 (content derived from W101)
+.
+-Rollback MUST itself create events.
++Rollback MUST itself create new factual records, verification evidence, a new World commit receipt, and a post-commit successful outcome event.
+.
+.History is never erased.
+.
+@@ -506,7 +522,7 @@ Compensation creates new events.
+.23. Rollback vs Compensation
+.
+.Mechanism	Meaning
+-Rollback	Restore prior state
++Rollback	Create a new version restoring a prior modeled condition
+.Compensation	Perform corrective action
+.Retry	Repeat operation
+.Abort	Stop operation
+@@ -517,7 +533,7 @@ These mechanisms MUST NOT be treated as interchangeable.
+.
+.24. Verification
+.
+-Verification evaluates whether the resulting World matches expectations.
++Verification evaluates whether observed outcomes and the candidate World match expectations before authoritative World commitment.
+.
+.Example:
+.
+@@ -536,6 +552,8 @@ then:
+.
+.VERIFICATION_FAILED
+.
++Every verification receipt for a consequential transition MUST bind the exact parent World version, candidate transition hash, evidence set, and verification policy version. It authorizes no commit by itself.
++
+.⸻
+.
+.25. Expected State
+@@ -593,7 +611,7 @@ Agent B → W100
+.
+.Both produce changes.
+.
+-The World Engine MUST detect whether they conflict.
++The World Kernel commit boundary MUST detect whether they conflict.
+.
+.⸻
+.
+@@ -609,7 +627,7 @@ If current World is:
+.
+.W101
+.
+-the transition engine evaluates whether the proposed delta remains valid.
++the World Kernel compare-and-swap MUST reject the commit. The previous verification receipt is inapplicable because its parent binding is stale. Any retry or merge MUST prepare a new candidate against `W101` and obtain new verification.
+.
+.⸻
+.
+@@ -649,7 +667,7 @@ Conflicts may include:
+.
+.32. Merge
+.
+-Compatible changes MAY be merged.
++Compatible changes MAY be merged only by preparing a new candidate against the current parent and obtaining new verification. A merge MUST NOT reuse stale verification from either original candidate.
+.
+.Example:
+.
+@@ -758,7 +776,7 @@ ARCHIVED → ACTIVE
+.
+.may be prohibited unless explicitly defined.
+.
+-The World Engine MUST reject undefined state transitions.
++The World Kernel MUST reject undefined state transitions.
+.
+.⸻
+.
+@@ -794,7 +812,7 @@ Examples:
+.
+.postconditions:
+.  - target_state_changed
+-  - event_committed
++  - pre_commit_facts_durable
+.  - verification_passed
+.
+.⸻
+@@ -805,11 +823,11 @@ Given identical:
+.
+.Initial World
+.+
+-Identical Event Stream
++Identical Canonical World Commit Receipts and Bound Inputs
+.
+.the resulting World MUST be identical.
+.
+-Replay(W0, Events)
++Replay(W0, Receipts)
+.=
+.Wn
+.
+@@ -926,7 +944,7 @@ VERIFY
+.   ↓
+.COMMIT
+.
+-The commit operation MUST be atomic within the authoritative World Store.
++Before commit, the verification receipt MUST be checked against the exact current parent World version, candidate transition hash, evidence set, and verification policy version. The World Kernel then performs compare-and-swap and MUST atomically make visible the World version, `WORLD_COMMIT_RECEIPT`, and committed-event delivery intent. A parent mismatch fails closed, records the conflict, and requires re-preparation and re-verification.
+.
+.⸻
+.
+@@ -943,12 +961,13 @@ On restart Veda examines:
+.* transaction state,
+.* event store,
+.* world version,
+-* commit markers.
++* `WORLD_COMMIT_RECEIPT` records,
++* committed-event delivery intents and delivery acknowledgments.
+.
+-The runtime determines whether to:
++Recovery MUST determine authority from the atomic triple, never from outcome-event delivery alone. If the triple is absent, the candidate did not commit; if it is present, the World version is authoritative and delivery resumes idempotently. An absent triple may be retried only after rechecking authorization, current parent, and verification applicability. The runtime then determines whether to:
+.
+-COMMIT
+-ROLLBACK
++RETRY_COMMIT_AFTER_REVALIDATION
++COMPENSATE
+.RECOVER
+.ABORT
+.
+@@ -962,11 +981,13 @@ Conceptually:
+.
+.Intent
+. ↓
+-Event Record
++Pre-Execution Intent / Authorization Facts
++ ↓
++Execution Fact → Observation Fact → Verification Fact
+. ↓
+-State Change
++Atomic World Version + Receipt + Delivery Intent
+. ↓
+-Commit Marker
++Post-Commit Outcome Event Delivery
+.
+.This improves crash recovery.
+.
+@@ -1027,6 +1048,8 @@ Every transition SHOULD expose:
+.* duration,
+.* result,
+.* verification state.
++* World commit receipt ID.
++* committed-event delivery intent ID and delivery status.
+.
+.⸻
+.
+@@ -1103,7 +1126,7 @@ Performance optimizations MUST NOT violate deterministic replay or integrity.
+.The following invariants are mandatory.
+.
+.ID	Invariant
+-WT-1	Every authoritative state change originates from a valid Event.
++WT-1	Every authoritative state change originates from validated factual inputs and a valid verification receipt.
+.WT-2	Invalid Events cannot mutate authoritative World state.
+.WT-3	Every committed World version has a valid parent.
+.WT-4	Entity identity remains stable.
+@@ -1115,6 +1138,11 @@ WT-9	Simulation branches cannot silently modify primary World.
+.WT-10	Deterministic replay must reproduce authoritative state.
+.WT-11	Conflicts must be detected before unsafe merge.
+.WT-12	Constitutional state cannot be autonomously modified.
++WT-13	Only the World Kernel commits authoritative modeled World State.
++WT-14	World version, WORLD_COMMIT_RECEIPT, and delivery intent become visible atomically.
++WT-15	Verification binds exact parent version, candidate hash, evidence set, and policy version.
++WT-16	A parent-version conflict invalidates verification applicability and requires re-preparation and re-verification.
++WT-17	Pre-commit factual records and failed paths remain durable without claiming successful World commitment.
+.
+.⸻
+.
+@@ -1142,10 +1170,17 @@ transition:
+.    - file_exists
+.  verification:
+.    status: PASSED
++    receipt_id: ver_001
++    parent_world_version: W100
++    candidate_transition_hash: sha256:...
++    evidence_set_hash: sha256:...
++    verification_policy_version: verification-policy@7
+.  result:
+.    status: COMMITTED
+.  resulting_world:
+.    version: W101
++    world_commit_receipt_id: wcr_101
++    committed_event_delivery_intent_id: delivery_101
+.
+.⸻
+.
+@@ -1155,7 +1190,7 @@ transition:
+.                 │   World W100  │
+.                 └───────┬───────┘
+.                         │
+-                       Event
++                 Validated Inputs
+.                         │
+.                         ▼
+.                ┌─────────────────┐
+@@ -1181,10 +1216,12 @@ transition:
+.                PASS           FAIL
+.                  │             │
+.                  ▼             ▼
+-               COMMIT        ROLLBACK
++               COMMIT        ABORT / RECOVER
+.                  │
+.                  ▼
+.              World W101
++              + Receipt
++              + Delivery Intent
+.
+.⸻
+.
+@@ -1273,6 +1310,11 @@ An implementation conforms to RFC-0004 if it provides:
+.10. World versioning.
+.11. Crash recovery.
+.12. Transition auditability.
++13. Explicit Execution → Observation → Verification lifecycle.
++14. Parent-specific verification binding and stale-verification rejection.
++15. Atomic World version, `WORLD_COMMIT_RECEIPT`, and committed-event delivery intent.
++16. Idempotent post-commit outcome-event delivery.
++17. Durable failed, rejected, denied, conflict, and recovery evidence.
+.
+.⸻
+.
+@@ -1298,11 +1340,17 @@ Event
+.    ↓
+.Transition
+.    ↓
++Execution
++    ↓
++Observation
++    ↓
+.Verification
+.    ↓
+-Commit
++World Kernel Atomic Commit
+.    ↓
+.World(t+1)
++    ↓
++Successful Outcome Event → Chronicle
+.
+.This sequence is the fundamental state-transition law of Veda.
+.
+@@ -1310,9 +1358,11 @@ This sequence is the fundamental state-transition law of Veda.
+.
+.67. Status
+.
+-Draft v0.1.0
++Draft v0.2.0-proposed
++
++This owner-directed normalization remains proposed Draft text. It does not accept this RFC, close WM-12, or complete RFC Freeze.
+.
+-RFC-0004 defines the state-transition semantics of Veda and establishes the mechanism by which historical Events become authoritative World State.
++RFC-0004 defines the state-transition semantics of Veda and establishes the mechanism by which validated factual inputs, authorization, observation, and verification are committed by the World Kernel as authoritative modeled World State.
+.
+.Without RFC-0004, Veda can describe a world and record events.
+.

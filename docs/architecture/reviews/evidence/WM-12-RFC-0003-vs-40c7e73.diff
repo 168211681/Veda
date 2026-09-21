@@ -1,0 +1,343 @@
+diff --git a/docs/rfc/RFC-0003-event-model.md b/docs/rfc/RFC-0003-event-model.md
+index d97a2d05873773b7dab1742f66cf95535ca4313a..cc75f165533c661a9fba29092db7cddd300c412a 100644
+--- a/docs/rfc/RFC-0003-event-model.md
++++ b/docs/rfc/RFC-0003-event-model.md
+@@ -3,7 +3,7 @@ RFC-0003 — Veda Event Model
+.RFC: RFC-0003
+.Title: Veda Event Model
+.Status: Draft
+-Version: 0.1.0
++Version: 0.2.0-proposed
+.Category: Core / Event / Audit / Runtime
+.Depends on: RFC-0001, RFC-0001A, RFC-0002
+.
+@@ -17,19 +17,25 @@ An Event represents something that happened, was observed, was proposed, was exe
+.
+.Events form the historical foundation of Veda.
+.
+-The World Model describes the current representation of reality.
++The World Model describes authoritative current modeled World State.
+.
+.The Event Model describes the sequence of changes that produced that representation.
+.
+-The fundamental relationship is:
++The fundamental successful-outcome relationship is:
+.
+.World(t)
++   +
++Validated Inputs + Authorization
+.   ↓
+-Event
++Execution → Observation → Verification
++   ↓
++World Kernel Atomic Commit
++   ↓
++World(t+1) + WORLD_COMMIT_RECEIPT + Delivery Intent
+.   ↓
+-World(t+1)
++Successful Outcome Event → Chronicle
+.
+-Veda MUST preserve sufficient event history to reconstruct significant world states.
++Truthful pre-commit factual records MAY be preserved after their represented facts occur. They do not claim successful completion, authorize mutation, or advance authoritative World State. Veda MUST preserve sufficient factual history and World commit receipts to reconstruct significant modeled World states and explain rejected or failed attempts.
+.
+.⸻
+.
+@@ -474,23 +480,23 @@ action_id = act_001
+.
+.13. Event State
+.
+-Events themselves have lifecycle states.
++Event candidates and durable factual records have distinct lifecycle states.
+.
+.CREATED
+. ↓
+-RECORDED
+- ↓
+.VALIDATED
+. ↓
+-COMMITTED
++FACT_RECORDED
++
++Validation failure produces `REJECTED` or `QUARANTINED` as policy requires. A durable rejected-attempt record is a truthful historical fact, but it is not an accepted transition input and cannot mutate World State.
+.
+-Invalid events MUST NOT become part of authoritative world history.
++A successful outcome event is materialized only after a `WORLD_COMMIT_RECEIPT` exists. The word `COMMITTED` MUST NOT be used ambiguously for both durable event persistence and authoritative World commitment.
+.
+.⸻
+.
+.14. Append-Only Principle
+.
+-Committed events MUST be immutable.
++Durably persisted factual records and successful outcome events MUST be immutable.
+.
+.Veda MUST NOT edit historical events.
+.
+@@ -569,31 +575,31 @@ Event Store
+.├── evt_004
+.└── evt_005
+.
+-The Event Store is the authoritative historical source for committed events.
++The Event Store is the Chronicle-owned durable historical source for factual records and successful outcome events. Its historical authority does not grant authority over current modeled World State, external reality, or the truth of an unverified claim.
+.
+.⸻
+.
+.19. Event Sourcing
+.
+-The World MAY be reconstructed from events.
++Modeled World State MAY be reconstructed from valid World commit receipts and the exact inputs bound by those receipts.
+.
+.Initial World
+.     +
+-Event 1
++Receipt 1 + Bound Inputs
+.     +
+-Event 2
++Receipt 2 + Bound Inputs
+.     +
+-Event 3
++Receipt 3 + Bound Inputs
+.     =
+.World N
+.
+.Conceptually:
+.
+.world = initial_world()
+-for event in event_stream:
+-    world = apply(world, event)
++for receipt in canonical_world_commit_receipts:
++    world = apply_verified_transition(world, receipt)
+.
+-The resulting state MUST be deterministic for authoritative replay.
++Pre-commit facts, rejected attempts, and delivery retries remain part of history but MUST NOT be applied as successful World transitions. The resulting state MUST be deterministic for authoritative replay.
+.
+.⸻
+.
+@@ -615,7 +621,7 @@ Events 10001 ─────────── 20000
+.
+.Snapshots are optimizations.
+.
+-Events remain the historical authority.
++Chronicle history remains the historical authority; valid World commit receipts determine which transitions advance authoritative modeled World State.
+.
+.⸻
+.
+@@ -633,7 +639,7 @@ Example:
+.
+.push_repo:veda:commit:abc123
+.
+-If the same action is received twice, Veda SHOULD detect the duplicate.
++If the same action is received twice, Veda MUST detect the duplicate when the action can cause consequential external or World effects. Delivery of the same committed-event intent more than once MUST be processed using a stable delivery-intent identifier and MUST NOT re-execute the World transition.
+.
+.⸻
+.
+@@ -788,7 +794,7 @@ References or hashes MAY be used.
+.
+.31. Verification Link
+.
+-Every significant action SHOULD link to a verification event.
++Every consequential action MUST link to a verification receipt before authoritative World commitment.
+.
+.Example:
+.
+@@ -800,19 +806,28 @@ VERIFICATION_PASSED
+.
+.Execution without verification is incomplete for significant operations.
+.
++The verification receipt MUST bind:
++
++* the exact parent World version;
++* the candidate transition hash;
++* the evidence set; and
++* the verification policy version.
++
++If the parent version is stale at compare-and-swap, the receipt is no longer applicable. The conflict MUST be recorded, and retry requires a newly prepared candidate and new verification.
++
+.⸻
+.
+.32. World Transition
+.
+-A committed event may produce a World transition.
++A validated factual record may be an input to a proposed World transition. It does not itself produce or authorize the transition.
+.
+-World W1
+-   +
+-Event E1
+-   =
+-World W2
++World W1 + Bound Inputs + Verification Receipt
++   ↓
++World Kernel Atomic Commit
++   ↓
++World W2 + WORLD_COMMIT_RECEIPT + Delivery Intent
+.
+-The World Engine MUST reject events that violate World integrity rules.
++Only the World Kernel may commit the authoritative transition. It MUST reject candidates that violate World integrity rules. A successful outcome event is emitted only after the atomic commit and references the receipt and `W2`.
+.
+.⸻
+.
+@@ -830,7 +845,7 @@ An event may be rejected because:
+.
+.Rejected events MUST NOT mutate authoritative World state.
+.
+-They SHOULD still be recorded as rejected attempts when security/audit policy requires it.
++Consequential rejected, denied, failed, conflicted, and recovery attempts MUST still produce durable audit evidence. Such records MUST describe the actual failure state and MUST NOT masquerade as successful outcome events.
+.
+.⸻
+.
+@@ -930,7 +945,7 @@ Deletion policies MUST NOT silently destroy constitutionally required audit hist
+.
+.40. Chronicle
+.
+-The Veda Chronicle is a human-readable interpretation of Event history.
++The Veda Chronicle is the durable, append-only historical authority for factual records and successful outcome events. Human-readable timelines and query views are projections over that history.
+.
+.Example:
+.
+@@ -950,9 +965,7 @@ Passed
+.Result:
+.Committed
+.
+-Chronicle is a view over authoritative events.
+-
+-Chronicle MUST NOT become the authoritative source itself.
++Chronicle preserves what Veda recorded as having occurred. It is not authoritative for current modeled World State, which belongs only to the World Kernel, and an event record is not automatically evidence, verification, or external truth.
+.
+.⸻
+.
+@@ -979,9 +992,9 @@ Given:
+.
+.Initial World
+.+
+-Event Stream
++Canonical World Commit Receipts + Bound Inputs
+.
+-Veda SHOULD be able to reconstruct historical World states.
++Veda SHOULD be able to reconstruct historical modeled World states by replaying the canonical sequence of valid `WORLD_COMMIT_RECEIPT` records and their bound transition inputs.
+.
+.Example:
+.
+@@ -1045,7 +1058,9 @@ The Event System MAY provide:
+.
+.Authoritative commit MUST be distinguished from eventual delivery.
+.
+-An event being delivered to an agent does not mean it has been committed.
++An event being delivered to an agent does not mean an authoritative World commit occurred.
++
++For a successful World transition, the World Kernel atomically persists a committed-event delivery intent with the new World version and `WORLD_COMMIT_RECEIPT`. Delivery workers MAY retry that intent. Consumers MUST deduplicate by stable intent/event identity, and delivery retry MUST NOT cause duplicate World execution. Chronicle acknowledgment is audit evidence of persistence, not the authority that created the World version.
+.
+.⸻
+.
+@@ -1053,7 +1068,7 @@ An event being delivered to an agent does not mean it has been committed.
+.
+.Consumers may include:
+.
+-* World Engine
++* World Kernel
+.* Memory Engine
+.* Chronicle
+.* Audit Engine
+@@ -1217,6 +1232,10 @@ E9	Event consumers must support duplicate-safe processing.
+.E10	AI models cannot directly rewrite Event history.
+.E11	Security events cannot be silently discarded.
+.E12	Historical events remain reconstructable.
++E13	Pre-commit factual records cannot claim successful World commitment or advance World State.
++E14	Every successful outcome event references exactly one valid WORLD_COMMIT_RECEIPT and resulting World version.
++E15	Committed-event delivery is idempotent and cannot re-execute a World transition.
++E16	Rejected, denied, failed, conflicted, and recovery attempts remain durably auditable.
+.
+.⸻
+.
+@@ -1226,8 +1245,9 @@ Canonical example:
+.
+.event:
+.  event_id: evt_01JXYZ123
+-  event_type: ACTION_COMPLETED
+-  schema_version: 1
++  event_type: WORLD_TRANSITION_COMMITTED
++  lifecycle_class: SUCCESSFUL_OUTCOME
++  schema_version: 2
+.  timestamp:
+.    observed_at: 2026-09-16T03:20:10Z
+.    recorded_at: 2026-09-16T03:20:11Z
+@@ -1239,8 +1259,8 @@ event:
+.    type: DOCUMENT
+.  trace:
+.    trace_id: trace_001
+-    parent_event_id: evt_action_started
+-    causation_id: evt_action_started
++    parent_event_id: evt_verification_passed
++    causation_id: evt_verification_passed
+.  authorization:
+.    authorization_id: auth_001
+.    policy_id: policy_workspace_write
+@@ -1252,12 +1272,19 @@ event:
+.    world_id: world_primary
+.    world_version_before: W10482
+.    world_version_after: W10483
++    world_commit_receipt_id: wcr_10483
++    candidate_transition_hash: sha256:...
++    committed_event_delivery_intent_id: delivery_10483
+.  result:
+.    status: SUCCESS
+.    summary: RFC-0003 created
+.  verification:
+.    status: PASSED
+.    verification_id: ver_001
++    parent_world_version: W10482
++    candidate_transition_hash: sha256:...
++    evidence_set_hash: sha256:...
++    verification_policy_version: verification-policy@7
+.  integrity:
+.    sequence: 10483
+.    previous_hash: sha256:...
+@@ -1280,23 +1307,25 @@ event:
+.                └───────┬───────┘
+.                        ↓
+.                ┌───────────────┐
+-                │ Event Recorded│
++                │ Execution     │
+.                └───────┬───────┘
+.                        ↓
+.                ┌───────────────┐
+-                │ Event Validated
++                │ Observation   │
+.                └───────┬───────┘
+.                        ↓
+.                ┌───────────────┐
+-                │ Event Committed
++                │ Verification  │
+.                └───────┬───────┘
+.                        ↓
+.                ┌───────────────┐
+-                │ World Updated │
++                │ Atomic World  │
++                │ Commit + Intent
+.                └───────┬───────┘
+.                        ↓
+.                ┌───────────────┐
+-                │ Consumers     │
++                │ Outcome Event │
++                │ + Chronicle   │
+.                └───────────────┘
+.
+.⸻
+@@ -1380,12 +1409,18 @@ A Veda implementation conforms to RFC-0003 if it provides:
+.11. Duplicate-safe processing.
+.12. Historical replay capability.
+.13. Auditability.
++14. Explicit separation of pre-commit factual records and post-commit successful outcome events.
++15. Parent-specific verification binding and stale-verification rejection.
++16. Atomic World version, `WORLD_COMMIT_RECEIPT`, and delivery-intent visibility.
++17. Durable audit evidence for denied, rejected, failed, conflicted, and recovery paths.
+.
+.⸻
+.
+.61. Status
+.
+-Draft v0.1.0
++Draft v0.2.0-proposed
++
++This owner-directed normalization remains proposed Draft text. It does not accept this RFC, close WM-12, or complete RFC Freeze.
+.
+.RFC-0003 defines the historical event foundation of Veda.
+.

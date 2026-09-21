@@ -1,0 +1,158 @@
+diff --git a/docs/rfc/RFC-0001-constitution.md b/docs/rfc/RFC-0001-constitution.md
+index 5140667f1fa97e09fddce0c23d9f7bfcc00a287d..2e50dfdb273134e3a66819062a5b8cbe7b2fbaf1 100644
+--- a/docs/rfc/RFC-0001-constitution.md
++++ b/docs/rfc/RFC-0001-constitution.md
+@@ -3,7 +3,7 @@ RFC-0001 — Veda Constitution
+.RFC: RFC-0001
+.Title: Veda Constitution
+.Status: Draft
+-Version: 0.1.0
++Version: 0.2.0-proposed
+.Author: Project Veda
+.Category: Constitutional / Core
+.Depends on: None
+@@ -52,7 +52,7 @@ This Constitution governs every layer of Project Veda.
+.Included systems:
+.
+.* Veda Core
+-* World Engine
++* World Kernel
+.* Event Engine
+.* Memory System
+.* Brain / Knowledge Library
+@@ -125,7 +125,7 @@ A decision granting permission for one specific action.
+.
+.World
+.
+-The structured representation of reality maintained by Veda.
++The structured modeled representation of relevant reality maintained by Veda. The World is not external reality.
+.
+.World consists of:
+.
+@@ -139,7 +139,19 @@ World consists of:
+.
+.Event
+.
+-A recorded occurrence.
++A factual record of an occurrence. An Event does not by itself authorize or commit a World mutation.
++
++Pre-Commit Factual Record
++
++An immutable record created after its represented fact occurs and before authoritative commitment. It may record proposal, authorization, denial, execution, observation, verification, rejection, failure, conflict, or recovery facts. It MUST NOT claim successful completion, authorize World mutation, or advance authoritative World State.
++
++Successful Outcome Event
++
++A post-commit Event that reports a verified operation as successfully committed. It MUST reference the corresponding World commit receipt and resulting World version.
++
++Commit
++
++The authoritative operation outcome and modeled World commitment performed by the World Kernel. Commit is not Event Fabric delivery and is not implied by durable factual recording.
+.
+.Evidence
+.
+@@ -237,6 +249,10 @@ Commit
+.
+.Execution success is not outcome success.
+.
++The `Commit` in this lifecycle is the authoritative operation outcome and modeled World commitment. Truthful factual records MAY be durably appended after the represented fact occurs between lifecycle stages. Such recording does not constitute commitment and MUST NOT claim successful completion or advance authoritative World State.
++
++A required verification result is usable for commitment only when its durable receipt binds the exact parent World version, candidate transition hash, evidence set, and verification policy version.
++
+.⸻
+.
+.P7 — Auditability
+@@ -252,6 +268,9 @@ Minimum trace:
+.* Action
+.* Result
+.* Verification
++* Commit, rejection, denial, failure, conflict, or recovery outcome
++
++Consequential denied, rejected, failed, conflicted, and recovery paths MUST remain durably auditable even when no World commit occurs.
+.
+.⸻
+.
+@@ -328,9 +347,13 @@ Observation
+. ↓
+.Verification
+. ↓
+-World Update
++World Kernel Commit
++ ↓
++Successful Outcome Event
+. ↓
+-Audit Event
++Chronicle / Audit Projection
++
++Pre-commit proposal, authorization, execution, observation, verification, rejection, and failure facts MAY be recorded after they occur. They remain historical evidence only and do not bypass the World Kernel commit boundary.
+.
+.Forbidden architecture:
+.
+@@ -436,17 +459,23 @@ OBSERVING
+.   ↓
+.VERIFYING
+.   ↓
+-COMMITTED
++WORLD_COMMITTED
++   ↓
++OUTCOME_EVENT_RECORDED
++
++`EVENT_RECORDED` is an orthogonal factual-record lifecycle state and MUST NOT be interpreted as `WORLD_COMMITTED`.
+.
+.Failure path:
+.
+-VERIFY FAIL
++DENIED / REJECTED / VERIFY_FAILED / CONFLICT / FAILED
+.   ↓
+-ROLLBACK
++FACT_RECORDED
+.   ↓
+-DIAGNOSE
++ROLLBACK / COMPENSATE / DIAGNOSE
+.   ↓
+-RETRY / ABORT
++RETRY / ABORT / RECOVERY_REQUIRED
++
++Failure-path records MUST NOT advance authoritative World State or be represented as successful outcome Events.
+.
+.⸻
+.
+@@ -455,7 +484,7 @@ Memory Rules
+.Veda distinguishes five persistent concepts.
+.
+.Type	Meaning
+-Event	Something happened.
++Event	A factual occurrence was recorded.
+.Experience	What Veda experienced.
+.Lesson	Extracted pattern.
+.Memory	Stored information.
+@@ -640,6 +669,8 @@ Retry / Abort
+.
+.Retries MUST be bounded.
+.
++Failure, conflict, rollback, compensation, and recovery evidence MUST be appended as new immutable factual records. Recovery MUST NOT rewrite committed history. Any corrective World change requires a separately authorized, verified, traceable World Kernel transition.
++
+.⸻
+.
+.Privacy Principles
+@@ -666,8 +697,8 @@ I2	Intelligence ≠ Authority.
+.I3	Capability ≠ Permission.
+.I4	Permission is scoped.
+.I5	Evidence before durable belief.
+-I6	Verification before commitment.
+-I7	Significant actions are auditable.
++I6	Verification before authoritative operation and World commitment.
++I7	Significant successful, denied, rejected, failed, conflicted, and recovery actions are durably auditable.
+.I8	Reversible actions are preferred.
+.I9	Uncertainty is explicit.
+.I10	No self authorization.
+@@ -730,6 +761,8 @@ MAJOR.MINOR.PATCH
+.
+.Status
+.
+-Draft v0.1.0
++Draft v0.2.0-proposed
++
++This document is the constitutional foundation of Project Veda and must remain stable before implementation of the World Kernel, Brain, Capability Fabric, and future Veda Runtime.
+.
+-This document is the constitutional foundation of Project Veda and must remain stable before implementation of the World Engine, Brain, Capability Fabric, and future Veda Runtime.
++This proposed normalization distinguishes truthful pre-commit factual records from post-commit successful outcome Events without changing the Architecture Constitution or granting Event/Chronicle components World authority.
