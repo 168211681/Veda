@@ -1,0 +1,204 @@
+diff --git a/docs/rfc/RFC-0026-verification-engine.md b/docs/rfc/RFC-0026-verification-engine.md
+index 9e4a34b..a958319 100644
+--- a/docs/rfc/RFC-0026-verification-engine.md
++++ b/docs/rfc/RFC-0026-verification-engine.md
+@@ -68,7 +68,7 @@ Collect Evidence
+  ↓
+ Verify
+  ↓
+-Update World
++Submit verified transition to World Kernel
+ 
+ An action returning:
+ 
+@@ -985,6 +985,16 @@ Recipient received funds
+ 
+ These are different verification levels.
+ 
++A request being accepted is not proof that the external effect occurred.
++For an UNKNOWN or indeterminate external effect, the Verification Engine MUST
++request or consume reconciliation evidence from the external authority where
++possible and MUST NOT blindly retry an effect that could be duplicated.
++Reconciliation MUST use the stable action/idempotency identity and available
++evidence. UNKNOWN, FAILED, and INCONCLUSIVE results MUST NOT independently
++produce a successful outcome or authoritative World commit. Veda MUST NOT
++claim exactly-once external execution without a supporting external-system
++contract.
++
+ ⸻
+ 
+ 40. Chain of Verification
+@@ -1048,9 +1058,13 @@ A completed verification MAY produce:
+ VerificationReceipt {
+     verification_id
+     subject
++    parent_world_version
++    candidate_transition_hash
+     expected
+     observed
++    evidence_set
+     evidence_hashes
++    verification_policy_version
+     verifier
+     method
+     timestamp
+@@ -1058,6 +1072,13 @@ VerificationReceipt {
+     signature
+ }
+ 
++For a consequential transition, `parent_world_version`,
++`candidate_transition_hash`, the complete identified `evidence_set`, and
++`verification_policy_version` MUST be bound into the receipt. These bindings
++define the exact candidate and policy context to which the receipt applies.
++The receipt is a pre-commit verification artifact; it is not a
++`WORLD_COMMIT_RECEIPT` and does not independently authorize World commitment.
++
+ The receipt SHOULD be independently verifiable.
+ 
+ ⸻
+@@ -1124,7 +1145,13 @@ World Version
+ Policy Version
+ Schema Version
+ 
+-Changing these MAY invalidate previous verification results.
++Changing these MAY invalidate historical verification results generally. For a
++consequential transition, however, a parent World-version mismatch MUST reject
++the attempted commit. The receipt bound to the old parent becomes inapplicable
++to the new parent. Any retry or merge MUST prepare a new candidate against the
++current parent, obtain fresh verification with a new receipt, and revalidate
++authorization where required by applicable policy. Historical verification
++records remain immutable evidence of what was previously verified.
+ 
+ ⸻
+ 
+@@ -1226,9 +1253,15 @@ This prevents false completion.
+ 
+ ⸻
+ 
+-50. Verification and World Update
++50. Verification and World Kernel Commit
+ 
+-Only verified observations SHOULD update authoritative World state when the relevant policy requires verification.
++The Verification Engine MAY evaluate observations and issue verification
++results or receipts. It MUST NOT independently mutate or commit authoritative
++modeled World State. Only the World Kernel may perform the authoritative
++compare-and-swap commit through its controlled commit boundary.
++
++Only verified observations SHOULD be submitted as inputs to an authoritative
++World transition when the relevant policy requires verification.
+ 
+ Observation
+  ↓
+@@ -1236,7 +1269,27 @@ Evidence
+  ↓
+ Verification
+  ↓
+-World Update
++Verification Receipt
++ ↓
++Exact-parent Applicability Check
++ ↓
++World Kernel CAS Commit
++ ↓
++Post-commit Successful Outcome Delivery
++
++The Verification Engine does not create the authoritative commit receipt. The
++World Kernel MUST atomically make visible all three of the following, or none:
++
++1. the resulting authoritative World version;
++2. the immutable `WORLD_COMMIT_RECEIPT`; and
++3. the durable committed-event delivery intent.
++
++The delivery intent is not an outcome event and does not prove delivery.
++`VerificationReceipt` is a pre-commit verification artifact bound to one
++parent/candidate/evidence/policy context. It is distinct from the immutable
++`WORLD_COMMIT_RECEIPT`, which exists only after a successful World Kernel CAS
++commit. Verification, event persistence, or Chronicle projection alone MUST
++NOT be presented as proof of World commitment.
+ 
+ Unverified information MAY exist as:
+ 
+@@ -1472,10 +1525,14 @@ Evaluate Completeness
+ Resolve Conflicts
+         ↓
+ Determine Status
+-        ↓
+-Create Verification Record
+-        ↓
+-Update World / Trigger Recovery
++       ↓
++Create Verification Record / Verification Receipt
++       ↓
++Exact-parent Applicability Check
++       ↓
++World Kernel CAS Commit / Trigger Recovery
++       ↓
++Post-commit Successful Outcome Delivery
+ 
+ ⸻
+ 
+@@ -1658,6 +1715,14 @@ VerificationReplayMismatch
+ VerificationExpired
+ VerificationInvalidated
+ 
++Verification events and receipts are pre-commit factual/historical records.
++They MUST NOT confer World Kernel authority, independently represent World
++commitment, or become post-commit successful outcome events. Chronicle
++preserves these records but does not own authoritative current World State.
++A successful outcome event MAY be issued only after the World Kernel atomic
++commit succeeds. Failed, rejected, stale, unknown, indeterminate and conflict
++paths MUST retain truthful durable evidence.
++
+ ⸻
+ 
+ 67. Security Threats
+@@ -1968,7 +2033,23 @@ This distinction is one of the most important responsibilities of the Verificati
+          VERIFIED     FAILED      UNKNOWN
+             │           │           │
+             ▼           ▼           ▼
+-       WORLD UPDATE   RECOVERY    ESCALATION
++   VERIFICATION RECEIPT  RECOVERY / ESCALATION
++            │
++            ▼
++   EXACT-PARENT APPLICABILITY CHECK
++            │
++            ▼
++      WORLD KERNEL CAS COMMIT
++            │
++            ▼
++   ┌──────────────────────────────┐
++   │ Atomic World Commit           │
++   │ World version                 │
++   │ WORLD_COMMIT_RECEIPT          │
++   │ Durable delivery intent       │
++   └──────────────┬───────────────┘
++                  ▼
++   POST-COMMIT SUCCESSFUL OUTCOME
+ 
+ ⸻
+ 
+@@ -2008,7 +2089,16 @@ EVIDENCE
+    ↓
+ VERIFICATION
+    ↓
+-WORLD UPDATE
++VERIFICATION RECEIPT
++   ↓
++EXACT-PARENT APPLICABILITY CHECK
++   ↓
++WORLD KERNEL CAS COMMIT
++   ↓
++ATOMIC WORLD KERNEL COMMIT
++(World version + WORLD_COMMIT_RECEIPT + delivery intent)
++   ↓
++POST-COMMIT SUCCESSFUL OUTCOME
+    ↓
+ EXPERIENCE
+    ↓
+@@ -2172,4 +2262,4 @@ Therefore:
+ 
+ Veda needs evidence for each transition.
+ 
+-That is the purpose of RFC-0026.
+\ No newline at end of file
++That is the purpose of RFC-0026.
