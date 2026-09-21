@@ -1,0 +1,153 @@
+diff --git a/docs/rfc/RFC-0001A-permission-matrix.md b/docs/rfc/RFC-0001A-permission-matrix.md
+index f886853..821168d 100644
+--- a/docs/rfc/RFC-0001A-permission-matrix.md
++++ b/docs/rfc/RFC-0001A-permission-matrix.md
+@@ -6,7 +6,7 @@ Title: Constitutional Permission Matrix
+ 
+ Status: Draft
+ 
+-Version: 0.1.0
++Version: 0.2.0-proposed
+ 
+ Category: Security / Authorization
+ 
+@@ -98,15 +98,27 @@ Lease Validation
+       ↓
+ Approval Engine
+       ↓
+-Capability Granted
++Permission Decision Receipt Persisted
++      ↓
++ALLOW / NOTIFY / REQUIRE_APPROVAL / DENY
++      ↓
++Capability Granted (only when permitted)
+       ↓
+ Execution
+       ↓
++Observation
++      ↓
+ Verification
+       ↓
+-Audit
++World Commit (where applicable)
++      ↓
++Post-Commit Outcome Event / Audit Projection
++
++A capability MUST NOT execute before a permitting decision and its durable permission decision receipt are both visible. A permission decision does not claim execution success and does not authorize World mutation outside its explicit capability scope.
+ 
+-A capability MUST NOT execute before completing this pipeline.
++`REQUIRE_APPROVAL` is a pending decision state, not an authorization to execute and not a capability grant. While approval is pending, the proposed action MUST remain blocked. Consequential execution may begin only after a valid approval is received, the capability, scope, risk, lease, time-window, and policy checks still pass, and the resulting permission decision receipt is durably persisted and visible. `NOTIFY` is an executing-but-notifying decision only where the applicable policy already permits execution; it does not convert a pending approval into permission. `DENY`, expiration, revocation, and out-of-scope results are non-authorizing terminal facts and MUST NOT grant or preserve execution authority.
++
++Denied, expired, revoked, and out-of-scope decisions terminate before execution but remain durably auditable.
+ 
+ ⸻
+ 
+@@ -168,6 +180,25 @@ Authorization MUST include:
+ 
+ Authorization MUST be auditable.
+ 
++Permission Decision Receipt
++
++A permission decision receipt is an immutable pre-commit factual record that proves which evaluation occurred. At minimum it MUST bind:
++
++* decision_id
++* trace_id
++* action_id
++* actor_id
++* capability
++* resource scope
++* risk classification
++* policy identifiers and versions
++* lease identifier and status where applicable
++* approval requirement
++* decision result
++* evaluated_at and recorded_at
++
++The permission decision and its required audit receipt MUST become visible atomically. If the receipt cannot be durably persisted, a consequential permission decision MUST NOT authorize execution.
++
+ ⸻
+ 
+ Capability Registry
+@@ -611,6 +642,8 @@ Possible results:
+ * LEASE_EXPIRED
+ * OUT_OF_SCOPE
+ 
++`REQUIRE_APPROVAL` MUST be represented as pending until the required approval is validly recorded. Approval does not bypass revalidation: before capability grant or consequential execution, the runtime MUST re-check the requested scope, capability, risk, lease, expiration, revocation state, and applicable policy, then persist the permitting decision receipt. If any check fails, the result becomes a truthful refusal or expiration/revocation fact and execution remains blocked.
++
+ ⸻
+ 
+ Permission Matrix
+@@ -663,6 +696,8 @@ Capabilities MAY be revoked because of:
+ 
+ Revocation creates an Event.
+ 
++Revocation and lease expiration invalidate any still-pending approval and any capability grant that has not yet been consumed under a valid lease. A revoked or expired grant MUST NOT authorize new consequential execution; the revocation/expiration fact and any blocked attempt MUST remain durably auditable. These rules clarify enforcement timing and do not change the established policy meanings of `NOTIFY`, `DENY`, expiration, or revocation.
++
+ ⸻
+ 
+ Emergency Modes
+@@ -688,20 +723,23 @@ Transition into emergency mode MUST generate a security event.
+ 
+ Audit Requirements
+ 
+-Every permission evaluation MUST create an audit record.
++Every permission evaluation MUST create a durable immutable audit record, including evaluations that result in `ALLOWED`, `DENIED`, `EXPIRED`, `REVOKED`, or another terminal refusal. Permission-decision evidence is recorded before execution; execution, observation, verification, World commit, rollback, compensation, and recovery evidence are separate later records.
+ 
+ Minimum fields:
+ 
+ audit:
++  decision_id:
+   trace_id:
+   action_id:
+   actor:
+   capability:
+   scope:
+   risk:
++  policy_versions:
+   approval_level:
+   result:
+-  timestamp:
++  evaluated_at:
++  recorded_at:
+ 
+ Audit results include:
+ 
+@@ -713,6 +751,10 @@ Audit results include:
+ * VERIFIED
+ * ROLLBACK
+ 
++`ALLOWED`, `DENIED`, `EXPIRED`, and `REVOKED` describe permission facts only. They MUST NOT be represented as execution success, verification success, or authoritative World commitment.
++
++For consequential operations, decision visibility and durable receipt visibility MUST be atomic. If required audit persistence fails, evaluation MUST fail closed, capability grant MUST remain ineffective, and no authoritative execution or World commit may proceed.
++
+ ⸻
+ 
+ Compliance Examples
+@@ -804,7 +846,7 @@ PM-1	Every consequential action requires capability evaluation.
+ PM-2	Scope validation occurs before execution.
+ PM-3	Deny rules override allow rules.
+ PM-4	Expired leases invalidate permissions.
+-PM-5	Every permission decision is auditable.
++PM-5	Every permission decision is durably auditable; a consequential decision whose required receipt cannot be persisted fails closed and cannot authorize execution.
+ PM-6	External intelligence has zero implicit authority.
+ PM-7	Constitution-protected capabilities cannot execute autonomously.
+ PM-8	Human override may revoke any non-constitutional lease immediately.
+@@ -829,7 +871,7 @@ Future RFC dependencies:
+ 
+ Versioning
+ 
+-Version: 0.1.0
++Version: 0.2.0-proposed
+ 
+ Future versions may extend capability categories and policy syntax without violating RFC-0001 constitutional invariants.
+ 
+@@ -837,6 +879,8 @@ Future versions may extend capability categories and policy syntax without viola
+ 
+ Status
+ 
+-Draft v0.1.0
++Draft v0.2.0-proposed
+ 
+ This document defines the constitutional authorization layer that every future Veda Runtime, Agent, MCP tool, and Veda OS component MUST implement before executing consequential actions.
++
++This proposed normalization distinguishes the durable permission decision fact from later execution, verification, World commit, and successful outcome records.
