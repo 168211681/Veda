@@ -1,0 +1,207 @@
+diff --git a/docs/rfc/RFC-0032-chronicle.md b/docs/rfc/RFC-0032-chronicle.md
+index 08d7357..b5da232 100644
+--- a/docs/rfc/RFC-0032-chronicle.md
++++ b/docs/rfc/RFC-0032-chronicle.md
+@@ -364,28 +364,45 @@ Timeline
+ 09:05 Action
+ 09:05 External Effect
+ 09:06 Verification
+-09:07 World Update
++09:07 World Kernel CAS commit observed
++     (World version + WORLD_COMMIT_RECEIPT + delivery intent)
++09:08 Post-commit outcome delivery attempt / outcome observed
+ 09:10 Reflection
+ 
++This timeline is a historical projection of records. Chronicle does not perform
++the update. For a consequential transition the applicable sequence is:
++
++Authorization → Execution → Observation → Evidence → Verification
++→ VerificationReceipt → Exact-parent applicability check
++→ World Kernel CAS atomic commit → Post-commit outcome delivery.
++
++The World Kernel CAS boundary makes the resulting authoritative World version,
++immutable WORLD_COMMIT_RECEIPT and durable committed-event delivery intent
++visible all-or-none. Actual delivery occurs afterward; a timeline entry or
++Chronicle persistence receipt does not represent delivery completion or commit
++authority.
++
+ ⸻
+ 
+ 15. World Reconstruction
+ 
+ ต้องสามารถ:
+ 
++Historical replay:
++
+ snapshot(t0)
+-+
+-events(t0 → t1)
+-=
+-world(t1)
+++ historical events(t0 → t1)
++= read-only historical projection(t1)
+ 
+ ดังนั้น:
+ 
+-World(t)
+-=
+-Snapshot
+-+
+-Validated World Events
++Read-only projection reconstruction uses a verified snapshot and ordered
++historical records. Authoritative modeled-World reconstruction is a separate
++operation and MUST use valid canonical WORLD_COMMIT_RECEIPT records together
++with their bound transition inputs. A validated factual event alone is not
++proof of authoritative World commitment. Snapshots are materialized historical
++state and never create a second commit authority. Replay MUST NOT re-execute
++external effects.
+ 
+ ⸻
+ 
+@@ -407,6 +424,12 @@ COMMITTED
+ 
+ World reconstruction ใช้เฉพาะ event ที่ policy อนุญาต
+ 
++`COMMITTED` is reserved for an observed modeled-World transition linked to a
++genuine validated WORLD_COMMIT_RECEIPT, its resulting authoritative World
++version and the corresponding World Kernel commit. `OBSERVED`, `VERIFIED` and
++other factual records MUST NOT be silently promoted to `COMMITTED`; Chronicle
++record persistence or validation does not commit the modeled World.
++
+ ⸻
+ 
+ 17. Unverified History
+@@ -1156,7 +1179,12 @@ EXECUTING
+  ↓
+ VERIFYING
+  ↓
+-COMMITTED
++EXACT-PARENT APPLICABLE
++ ↓
++WORLD KERNEL CAS COMMITTED
++ (World version + WORLD_COMMIT_RECEIPT + delivery intent)
++ ↓
++POST-COMMIT OUTCOME OBSERVED
+ 
+ หรือ:
+ 
+@@ -1168,6 +1196,13 @@ RECOVERY
+  ↓
+ RECOVERED
+ 
++`COMMITTED` in this historical state machine means that the corresponding
++World Kernel atomic commit actually occurred and its receipt is validated.
++`RECOVERED` may describe verified recovery evidence without claiming an
++authoritative World update; a RecoveryReceipt is not a WORLD_COMMIT_RECEIPT.
++Failed and UNKNOWN states remain factual history and cannot enter the
++successful modeled-World outcome path without the same exact-parent commit.
++
+ ⸻
+ 
+ 63. State Transition Validation
+@@ -1186,6 +1221,11 @@ COMMITTED
+ 
+ HistoricalTransitionAnomaly
+ 
++For a consequential transition, a direct `PROPOSED → COMMITTED` history is
++valid only when the record resolves to the applicable exact-parent World
++Kernel commit and genuine WORLD_COMMIT_RECEIPT; otherwise it is a historical
++anomaly and MUST NOT be treated as authoritative World advancement.
++
+ ⸻
+ 
+ 64. Chronicle Integrity Check
+@@ -1706,14 +1746,18 @@ World history:
+ 
+ World(t0)
+  ↓
+-Event
++canonical committed record / WORLD_COMMIT_RECEIPT
+  ↓
+ World(t1)
+  ↓
+-Event
++canonical committed record / WORLD_COMMIT_RECEIPT
+  ↓
+ World(t2)
+ 
++This is a historical projection of canonical commits, not a Chronicle mutation
++path. Generic events and factual records remain queryable but do not advance
++the authoritative modeled World.
++
+ สามารถ query ได้ทั้ง:
+ 
+ state
+@@ -1848,6 +1892,11 @@ ChronicleReceipt {
+     timestamp
+ }
+ 
++`ChronicleReceipt` acknowledges historical persistence only. It is not a
++VerificationReceipt, RecoveryReceipt or WORLD_COMMIT_RECEIPT, and neither it
++nor ProofOfInclusion grants modeled-World commit authority or creates a
++successful modeled-World outcome.
++
+ ⸻
+ 
+ 103. Historical Proof
+@@ -2048,6 +2097,12 @@ export(range)
+ archive(range)
+ restore_archive(ref)
+ 
++`reconstruct_world` and `restore_snapshot` return read-only historical
++projections, historical reconstruction or candidate context. They MUST NOT
++mutate current authoritative modeled World State, create a commit authority or
++re-execute external effects. Only World Kernel canonical commit receipts and
++their bound inputs can establish authoritative modeled-World reconstruction.
++
+ ⸻
+ 
+ 112. Historical Context API
+@@ -2129,6 +2184,13 @@ STATE_VERIFIED
+        ↓
+ WORLD_RECONSTRUCTED
+ 
++This state machine is read-only historical reconstruction. `EVENTS_APPLIED`,
++`STATE_VERIFIED` and `WORLD_RECONSTRUCTED` describe a projection result, not a
++mutation of current authoritative modeled World State. Authoritative
++reconstruction, where required, uses canonical WORLD_COMMIT_RECEIPT records
++and bound inputs; it does not create a second commit authority or re-execute
++external effects.
++
+ ⸻
+ 
+ 116. Reconstruction Failure
+@@ -2304,6 +2366,10 @@ Veda must be able to distinguish what happened, what was recorded, what was beli
+                            ▼
+                     Future / Learning
+ 
++`HISTORICAL WORLD` and `World Model` in this diagram are query/projection
++outputs. Chronicle, snapshots and projections do not mutate current
++authoritative modeled World State; only a World Kernel CAS commit can do so.
++
+ ⸻
+ 
+ 119. Example: File Deletion
+@@ -2332,7 +2398,10 @@ Observation
+     ↓
+ Verification
+     ↓
+-World Update
++World Kernel CAS atomic commit
++ (World version + WORLD_COMMIT_RECEIPT + delivery intent)
++    ↓
++Post-commit outcome delivery attempt / observed outcome
+ 
+ จากนั้นสามารถถาม:
+ 
+@@ -2340,6 +2409,10 @@ Why was file X deleted?
+ 
+ และ reconstruct ได้ทั้งสาย
+ 
++Chronicle records the external effect and its evidence; it does not perform
++the modeled-World commit. A physical filesystem effect is not claimed to be
++rolled back by rewriting Chronicle history.
++
+ ⸻
+ 
+ 120. Example: Failed External Action
