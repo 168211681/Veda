@@ -1,0 +1,240 @@
+diff --git a/docs/rfc/RFC-0027-rollback-and-recovery.md b/docs/rfc/RFC-0027-rollback-and-recovery.md
+index 4b5463b..2bc5d86 100644
+--- a/docs/rfc/RFC-0027-rollback-and-recovery.md
++++ b/docs/rfc/RFC-0027-rollback-and-recovery.md
+@@ -96,7 +96,12 @@ Execute Recovery
+    ↓
+ Verify Recovery
+    ↓
+-Update World
++Submit corrective candidate to the World Kernel
++
++The Recovery Engine MAY propose, coordinate and verify recovery or
++compensation. It MUST NOT independently mutate or commit authoritative modeled
++World State. Only the World Kernel may perform the exact-parent CAS atomic
++commit. External reality and Veda's modeled World State remain distinct.
+ 
+ Distributed workflows commonly use compensating operations rather than a global database rollback. These compensations must be designed for retries and idempotency because the original operation may already have committed partial effects. (Stacksaga Docs)
+ 
+@@ -317,7 +322,7 @@ Failure
+  ↓
+ Diagnose
+  ↓
+-World Update
++Reconcile current modeled World context
+  ↓
+ Replan
+  ↓
+@@ -633,10 +638,20 @@ Recovery Execution
+    ↓
+ Verification
+    ↓
+-World Update
++Submit corrective candidate to World Kernel
+ 
+ Recovery itself is therefore a controlled plan.
+ 
++For a consequential corrective transition, the controlled ordering is:
++
++Authorization → Execution → Observation → Evidence → Verification
++→ VerificationReceipt → Exact-parent applicability check
++→ World Kernel CAS atomic commit → Post-commit successful outcome delivery.
++
++Recovery execution alone is not recovery success. VerificationReceipt is a
++pre-commit artifact and is not a WORLD_COMMIT_RECEIPT. Only a successful World
++Kernel boundary may commit modeled World State.
++
+ ⸻
+ 
+ 22. Checkpoints
+@@ -791,6 +806,19 @@ Recover
+ 
+ Blind retry could produce a duplicate payment.
+ 
++For a consequential corrective transition, a parent World-version mismatch
++MUST reject the stale commit attempt. A VerificationReceipt bound to the old
++parent becomes inapplicable to a new candidate. Retry or merge MUST prepare a
++new candidate against the current parent, obtain fresh verification, and
++revalidate authorization where the applicable policy requires it. Historical
++verification records MUST NOT be erased.
++
++Recovery MUST preserve the stable action/idempotency identity and reconcile
++against available external-authority observations and evidence before any
++retry that could duplicate an effect. UNKNOWN remains UNKNOWN until evidence
++resolves it, and Veda MUST NOT claim exactly-once external execution without
++an explicit external-system guarantee.
++
+ ⸻
+ 
+ 28. Exactly-Once Effect
+@@ -841,6 +869,10 @@ RECOVERING
+    ↓
+ VERIFYING
+    ↓
++EXACT_PARENT_APPLICABILITY_CHECK
++   ↓
++WORLD_KERNEL_CAS_ATOMIC_COMMIT
++   ↓
+ RECOVERED
+ 
+ Alternative states:
+@@ -1058,6 +1090,22 @@ WorldReconciled
+ 
+ Historical failure MUST NOT disappear.
+ 
++These recovery events are pre-commit factual records unless they reference a
++successful World commit. Event persistence, RecoveryVerified,
++RecoveryCompleted, RecoveryReceipt and Chronicle projection MUST NOT
++independently confer World commit authority.
++
++Only the World Kernel may perform the authoritative CAS commit. That one
++boundary MUST atomically expose all three, or none:
++
++1. the resulting authoritative World version;
++2. the immutable WORLD_COMMIT_RECEIPT; and
++3. the durable committed-event delivery intent.
++
++The delivery intent is created inside the same boundary and successful
++modeled-World outcome delivery occurs afterward. Failed, partial, UNKNOWN or
++indeterminate recovery MUST NOT emit a successful modeled-World outcome.
++
+ ⸻
+ 
+ 38. Recovery and Chronicle
+@@ -1460,14 +1508,23 @@ Every completed recovery SHOULD produce:
+ 
+ RecoveryReceipt {
+     recovery_id
++    attempted_action_id
+     original_failure
+     original_state
+     failed_state
+     strategy
+     actions[]
++    observed_effects[]
+     evidence[]
+     verification
++    verification_status
++    verification_receipt_ref
++    parent_world_version
++    candidate_transition_hash
++    verification_policy_version
+     final_state
++    world_commit_status
++    world_commit_receipt_ref
+     remaining_risk
+     unresolved_effects
+     human_intervention
+@@ -1475,6 +1532,32 @@ RecoveryReceipt {
+     integrity_hash
+ }
+ 
++RecoveryReceipt is a Veda-owned recovery evidence and summary record. It is
++not a VerificationReceipt or a WORLD_COMMIT_RECEIPT, cannot independently
++authorize or prove authoritative modeled-World commitment, and cannot prove
++that an external effect was undone. The linkage fields preserve the exact
++parent World version, candidate transition hash, identified evidence set and
++verification policy version for a consequential corrective transition. A
++VerificationReceipt reference MAY be added only when that record exists; a
++WORLD_COMMIT_RECEIPT reference MAY be added only after a successful World
++Kernel commit. Recovery evidence may exist before verification, and absent
++references MUST remain absent rather than invented.
++
++For a consequential corrective transition, `evidence[]` represents the
++complete identified evidence set available for that recovery attempt. An
++irreversible external effect cannot be transactionally erased by rewriting
++Veda's modeled World State; any compensation is a separately authorized,
++observable and verifiable corrective action.
++
++Failed, rejected, partial, UNKNOWN, indeterminate, stale and
++recovery-required attempts MUST retain truthful durable factual evidence linked
++to the stable attempted action/recovery identity. The recovery result MUST
++distinguish external execution status, observed external effect, verification
++status, World commit status and recovery-required or escalation status. A
++successful external compensation MAY be recorded as an external fact even
++when modeled-World commit has not succeeded; it MUST NOT be represented as a
++successful modeled-World outcome.
++
+ ⸻
+ 
+ 55. Security Threats
+@@ -1572,7 +1655,11 @@ RECOVERY ACTION
+   ↓
+ VERIFICATION
+   ↓
+-WORLD UPDATE
++EXACT-PARENT APPLICABILITY CHECK
++  ↓
++WORLD KERNEL CAS ATOMIC COMMIT
++  ↓
++POST-COMMIT SUCCESSFUL OUTCOME DELIVERY
+   ↓
+ EXPERIENCE
+   ↓
+@@ -1906,7 +1993,8 @@ Recovery MUST distinguish execution success from recovery success.
+ 
+ REC-20
+ 
+-Recovery MUST update the World only according to verification policy.
++Recovery MUST submit modeled-World candidates only according to verification
++policy; only the World Kernel may commit authoritative modeled World State.
+ 
+ REC-21
+ 
+@@ -1948,6 +2036,21 @@ REC-30
+ 
+ No recovery mechanism may claim success without sufficient evidence.
+ 
++REC-31
++
++RecoveryReceipt MUST remain a Veda-owned recovery evidence/summary record and
++MUST NOT be treated as a VerificationReceipt or WORLD_COMMIT_RECEIPT.
++
++REC-32
++
++World version, WORLD_COMMIT_RECEIPT and committed-event delivery intent MUST
++be visible only as one World Kernel atomic commit boundary.
++
++REC-33
++
++Failed, partial, UNKNOWN, indeterminate, stale and recovery-required attempts
++MUST preserve truthful durable evidence linked to the attempted action.
++
+ ⸻
+ 
+ 67. Architecture
+@@ -1993,10 +2096,17 @@ No recovery mechanism may claim success without sufficient evidence.
+           SUCCESS       FAILURE
+              │             │
+              ▼             ▼
+-       WORLD UPDATE     ESCALATION
++ WORLD KERNEL CAS     ESCALATION
++ ATOMIC COMMIT
+              │
+              ▼
+-         EXPERIENCE
++ EXPERIENCE
++
++The SUCCESS branch reaches this point only after the World Kernel CAS atomic
++boundary. The boundary contains the resulting World version, immutable
++WORLD_COMMIT_RECEIPT and durable committed-event delivery intent as one
++all-or-none unit. A failed branch records factual failure or escalation and
++does not emit a successful modeled-World outcome.
+ 
+ ⸻
+ 
+@@ -2059,6 +2169,12 @@ Verify
+     ↓
+ Learn
+ 
++Verification informs a corrective candidate; it does not itself commit modeled
++World State. The Recovery Engine coordinates the attempt, while only the World
++Kernel performs the exact-parent CAS atomic commit and post-commit outcome
++delivery. Recovery evidence preserves external and historical truth without
++rewriting prior effects.
++
+ And the deepest rule is:
+ 
+-A system is not truly autonomous because it can perform actions. It becomes robust when it can recognize failure, contain damage, recover safely, verify the recovery, and learn without rewriting history.
+\ No newline at end of file
++A system is not truly autonomous because it can perform actions. It becomes robust when it can recognize failure, contain damage, recover safely, verify the recovery, and learn without rewriting history.
