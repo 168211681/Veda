@@ -1,0 +1,105 @@
+diff --git a/docs/adr/GOVERNANCE.md b/docs/adr/GOVERNANCE.md
+index ff7e5e6..51ac08a 100644
+--- a/docs/adr/GOVERNANCE.md
++++ b/docs/adr/GOVERNANCE.md
+@@ -424,8 +424,93 @@ Constitutional Review	Any change affecting constitutional principles.
+ 
+ ⸻
+ 
++RFC Governance Gates
++
++RFC governance records must distinguish these separate decisions and facts:
++
++1. Exact-text Owner approval;
++2. RFC lifecycle acceptance;
++3. RFC source commit authorization and commit state; and
++4. RFC Freeze.
++
++None of these decisions or facts is implied automatically by another. Exact-text Owner approval applies only to the identified exact bytes and approved scope. Changed bytes require renewed review under the applicable process. RFC acceptance is a lifecycle/governance decision and does not authorize committing the RFC source. Source commit authorization must be granted separately. A committed RFC is not thereby Accepted or Frozen. RFC Freeze does not silently alter any RFC lifecycle state. `Status: Architecture` is document classification / architecture-phase metadata, not RFC lifecycle acceptance. Audit records must keep Draft status, exact-text approval, source commit authorization/state, and freeze status distinguishable.
++
++WM-12 Governance Gate
++
++The canonical WM-12 governance gate is the proposal selected by Owner Decision D1:
++
++- Source: `docs/architecture/WM-12-EVENT-WORLD-COMMIT-ORDERING-PROPOSAL-2026-09-21.md`
++- SHA-256: `c44f3d129ebbe486cda1b339483ea225c3fb765278f1328ea0ee4205df5e2bad`
++- Materialization commit: `57cce1f2d572e2547ae264a87a9a0d392a6ff933`
++- Owner decision: `docs/architecture/reviews/GOVERNANCE-DECISION-RECORD-2026-09-23.md`
++- Canonical source materialization record: `docs/architecture/reviews/WM-12-CANONICAL-SOURCE-MATERIALIZATION-RECORD-2026-09-24.md`
++
++The proposal's twelve closure criteria are incorporated as the WM-12 closure criteria:
++
++1. The Owner explicitly selects an ordering alternative or approves a corrected canonical ordering.
++2. The proposal's eight key terms are defined without ambiguous use of `commit`.
++3. RFC-0001, RFC-0001A, RFC-0002, RFC-0003, and RFC-0004 state one normative ordering.
++4. The World Kernel remains the sole authority that commits authoritative modeled World State.
++5. Required verification has a durable reference before World commitment.
++6. The resulting World version, immutable `WORLD_COMMIT_RECEIPT`, and durable committed-event delivery intent share one all-or-none atomic visibility boundary.
++7. Consequential rejection and failure paths have a mandatory durable audit receipt.
++8. Replay, idempotency, conflict, and crash-recovery requirements pass cross-document audit.
++9. Accepted ADR-0001 and ADR-0002 semantics remain unchanged, or a new ADR is approved through its applicable process and clearly supersedes affected semantics.
++10. The Owner confirms the proposal's interpretation of the constitutional post-commit `Event → Chronicle` relationship, or a separately governed Constitutional amendment resolves it.
++11. Governance validation finds no unresolved P0 ordering contradiction.
++12. RFC lifecycle changes occur only through each RFC's applicable approval process; RFC-0002 remains Draft until that process is complete.
++
++Criterion 6 is interpreted together with later Owner-approved contracts and MUST NOT weaken the three-part atomic boundary stated above. This Governance section references and incorporates the canonical proposal; it does not create a competing WM-12 definition or amend the proposal. The proposal's historical status wording, including `PROPOSED — OWNER DECISION REQUIRED`, remains historical. Later Owner records control current governance state; historical artifacts must not be rewritten merely to appear current. The Owner is the final authority for WM-12 closure. Audits and validation provide evidence only and cannot close the gate.
++
++WM-12 gate statuses are:
++
++WM-12 remains `OPEN` unless and until an explicit closure decision is recorded under this gate.
++
++- `OPEN`: one or more closure requirements or required evidence remain outstanding.
++- `READY_FOR_REVIEW`: the required evidence package appears complete enough for Owner/governance closure review; this is not closure.
++- `CLOSED`: the Owner/governance decision explicitly records closure after review of every criterion and its evidence.
++
++The proposal's historical `RESOLVED` wording denotes that its criteria have been addressed; it does not itself transition this governance gate. A gate transition to `CLOSED` requires the explicit closure record described above. No audit result, source commit, RFC lifecycle change, exact-text approval, metadata change, or RFC Freeze decision may automatically close WM-12. WM-12 closure does not automatically complete RFC Freeze. RFC Freeze is not a prerequisite for WM-12 closure.
++
++RFC Freeze Gate
++
++RFC Freeze is a separate architecture governance milestone with these statuses:
++
++RFC Freeze remains `BLOCKED` unless and until an explicit decision changes its gate status under this section.
++
++- `BLOCKED`: one or more applicable prerequisites below remain unmet or lack required evidence.
++- `READY_FOR_REVIEW`: evidence is assembled for an explicit Owner/governance freeze decision; this is not completion.
++- `COMPLETE`: an explicit Owner/governance decision records that all applicable prerequisites passed.
++
++RFC Freeze review MUST verify and record:
++
++1. The RFC inventory in scope is identified.
++2. Document classification and RFC lifecycle state are distinguishable.
++3. Exact-text approval state is recorded where applicable.
++4. Source commit authorization and source commit state are recorded separately.
++5. Required RFC acceptance decisions are recorded through the applicable process.
++6. RFC source identities are stable and auditable.
++7. Consistency with the Architecture Constitution.
++8. Consistency with accepted ADRs.
++9. Cross-RFC semantic consistency.
++10. Dependency integrity.
++11. Required traceability.
++12. WM-12 is `CLOSED` under the WM-12 Governance Gate above.
++13. No unresolved P0 contradiction applicable to the freeze remains.
++14. Gate-blocking P1 findings that do not identify an unresolved contradiction with the Architecture Constitution, an accepted ADR, or another controlling normative contract must be resolved, demonstrated to be inapplicable with evidence, or accepted as residual risk through an authorized governance decision. Any P1 finding identifying such an unresolved normative contradiction must be resolved through the applicable governance process before RFC Freeze may be marked COMPLETE.
++15. Required architecture milestone audit and validation evidence exists.
++16. Exceptions and missing evidence are recorded truthfully.
++
++P2 findings are not required to be closed by this gate. This gate does not add an implementation or runtime-proof requirement. Only an explicit Owner/governance decision based on recorded validation may mark RFC Freeze `COMPLETE`. Exact-text approval, `Accepted` status alone, source commit, an audit `PASS` alone, metadata, or an architecture-phase label MUST NOT be treated as RFC Freeze completion.
++
++RFC Freeze completion does not itself accept Draft RFCs, authorize RFC source commits, complete ADR Freeze, authorize SPEC, authorize implementation, or prove runtime behavior. ADR Freeze remains governed by its existing gate and prerequisites. RFC Freeze completion is only the RFC Freeze prerequisite evaluated by that separate ADR Freeze Gate; it does not satisfy the other ADR Freeze criteria or transition ADR Freeze automatically.
++
++⸻
++
+ ADR Freeze Gate
+ 
++For this gate, `RFC Freeze is complete` means the RFC Freeze Gate above has status `COMPLETE`.
++
+ Veda may enter ADR Freeze only when:
+ 
+ * RFC Freeze is complete;
+@@ -548,4 +633,4 @@ The repository may proceed to SPEC Freeze only after:
+ * Governance Validation passes;
+ * ADR Freeze Gate passes.
+ 
+-Until all gates pass, the SPEC layer must not be treated as architecturally frozen.
+\ No newline at end of file
++Until all gates pass, the SPEC layer must not be treated as architecturally frozen.
