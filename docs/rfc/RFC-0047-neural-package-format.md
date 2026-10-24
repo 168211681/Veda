@@ -1,6 +1,6 @@
 RFC-0047 — Neural Package Format
 
-Status: Architecture
+Document Classification: Architecture
 Layer: 18 — Ecosystem
 Depends On: RFC-0001, RFC-0009, RFC-0012, RFC-0013, RFC-0015, RFC-0028, RFC-0032, RFC-0033, RFC-0038, RFC-0039, RFC-0041, RFC-0042, RFC-0043, RFC-0044, RFC-0045, RFC-0046
 Related: RFC-0048

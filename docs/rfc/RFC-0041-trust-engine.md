@@ -1,6 +1,6 @@
 RFC-0041 — Veda Trust Engine
 
-Status: Architecture
+Document Classification: Architecture
 Layer: 15 — Identity & Trust
 Depends On: RFC-0001, RFC-0012, RFC-0013, RFC-0014, RFC-0015, RFC-0026, RFC-0028, RFC-0031, RFC-0032, RFC-0033, RFC-0035, RFC-0038, RFC-0039, RFC-0040
 Used By: RFC-0016, RFC-0020, RFC-0025, RFC-0029, RFC-0042, RFC-0044, RFC-0045, RFC-0046, RFC-0048
