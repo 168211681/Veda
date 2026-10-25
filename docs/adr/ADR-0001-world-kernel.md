@@ -250,11 +250,12 @@ The World Kernel decision is referenced by:
 
 ## RFC Dependency
 
-The repository does not currently expose an established RFC identifier for the World Kernel / World State decision.
+The Owner-approved D3 traceability mapping is:
 
-No RFC identifier is invented in this ADR.
+- Primary: [RFC-0002 — Veda World Model](../rfc/RFC-0002-world-model.md).
+- Supporting: [RFC-0004 — Veda State & World Transition](../rfc/RFC-0004-state-and-world-transition.md).
 
-This is an unresolved traceability gap and must be resolved before the repository-wide ADR Freeze Gate can pass.
+This mapping records dependencies only. It does not change the architectural meaning of this Accepted ADR or grant RFC acceptance, source-commit authority, or Freeze approval.
 
 # Revisit Conditions
 
@@ -343,19 +344,19 @@ This ADR implements the following constitutional principles:
 
 ## RFC Traceability
 
-**Status: BLOCKED**
+**Mapping status: RECORDED — Owner decision D3 (2026-09-23).**
 
-The repository currently does not expose an established RFC identifier for the World Kernel / World State decision.
+The primary RFC dependency is [RFC-0002](../rfc/RFC-0002-world-model.md), supported by [RFC-0004](../rfc/RFC-0004-state-and-world-transition.md), as recorded in the [Governance Decision Record](../architecture/reviews/GOVERNANCE-DECISION-RECORD-2026-09-23.md).
 
-No RFC identifier is fabricated to satisfy the governance requirement.
+This corrects traceability only. WM-12 closure, RFC lifecycle acceptance, RFC Freeze, and ADR Freeze retain their separate governance gates.
 
-Required future relationship:
+Traceability chain (downstream SPEC, implementation, and test artifacts remain future work):
 
 ```text
 Architecture Constitution
         |
         v
-Relevant RFC
+RFC-0002 (primary); RFC-0004 (supporting)
         |
         v
 ADR-0001 World Kernel
@@ -368,3 +369,4 @@ Implementation
         |
         v
 Test
+```
