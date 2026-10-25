@@ -1,14 +1,14 @@
-# VEDA G1-SR-03..06 | PROPOSED RFC OVERLAY | 2026-10-25
+# VEDA G1-SR-03..06 | V2 RFC4+31 OVERLAY | 2026-10-25
 # REVIEW-ONLY ARTIFACT — NOT Owner-approved Exact Text; NOT a source write.
-# Three independent base sources: RFC-0004 on PR#4@1ef9aa4,
-# RFC-0031 on PR#5@47f0123, RFC-0027 on main@61a045f.
-# DO NOT git apply all three to a single uncomposed branch without first
-# reconciling base SHA, file history and cross-PR dependencies.
-# Existing Owner-exact-approved ADR-0011 Rev5 is only Proposed; no ADR is
-# Accepted or superseded by this RFC overlay. WM-12 OPEN; RFC Freeze BLOCKED.
-#
-# Source docs/rfc/RFC-0004-state-and-world-transition.md
-# Pinned commit 1ef9aa457786b7e1245f5d1164fb828b407ad347; blob 18996e0e4416894596c2f72a85f98d6862c502a4
+# RFC-0004 base PR#4 commit 1ef9aa457786b7e1245f5d1164fb828b407ad347
+#   blob 18996e0e4416894596c2f72a85f98d6862c502a4
+# RFC-0031 base PR#5 commit 47f01237e04c9c0ad27b172c08677063305f6e2c
+#   blob e0d9a4eed5eaf91a36a016e1296fd8c31f354da3
+# RFC-0027 has NO applicable V2 hunk. Approved SHA256:
+#   74c4b728b3535c29f0eae8ea8eda4d914e9f3c0041ef045513d78147419d5f0d
+# Its approved source already covers RecoveryReceipt/World Kernel CAS.
+# DO NOT mechanically stack mixed PR#4/PR#5 bases or apply to main.
+# Governance: P0 open, WM-12 open, RFC Freeze blocked, Trust G0 hold.
 diff --git a/docs/rfc/RFC-0004-state-and-world-transition.md b/docs/rfc/RFC-0004-state-and-world-transition.md
 --- a/docs/rfc/RFC-0004-state-and-world-transition.md
 +++ b/docs/rfc/RFC-0004-state-and-world-transition.md
@@ -34,8 +34,6 @@ diff --git a/docs/rfc/RFC-0004-state-and-world-transition.md b/docs/rfc/RFC-0004
  
  Conceptually:
  
-# Source docs/rfc/RFC-0031-event-audit-trace-fabric.md
-# Pinned commit 47f01237e04c9c0ad27b172c08677063305f6e2c; blob e0d9a4eed5eaf91a36a016e1296fd8c31f354da3
 diff --git a/docs/rfc/RFC-0031-event-audit-trace-fabric.md b/docs/rfc/RFC-0031-event-audit-trace-fabric.md
 --- a/docs/rfc/RFC-0031-event-audit-trace-fabric.md
 +++ b/docs/rfc/RFC-0031-event-audit-trace-fabric.md
@@ -176,66 +174,4 @@ diff --git a/docs/rfc/RFC-0031-event-audit-trace-fabric.md b/docs/rfc/RFC-0031-e
 +without requiring a fabricated WORLD_COMMIT_RECEIPT.
  
  ⸻
- 
-# Source docs/rfc/RFC-0027-rollback-and-recovery.md
-# Pinned commit 61a045f1bef8df9b8fa7ea1a20db53bdbdc214f2; blob 4b5463b46cbe0c8ddb2df3f182ae1970629485cb
-diff --git a/docs/rfc/RFC-0027-rollback-and-recovery.md b/docs/rfc/RFC-0027-rollback-and-recovery.md
---- a/docs/rfc/RFC-0027-rollback-and-recovery.md
-+++ b/docs/rfc/RFC-0027-rollback-and-recovery.md
-@@ -1472,12 +1472,23 @@
-     unresolved_effects
-     human_intervention
-     timestamps
--    integrity_hash
--}
--
--⸻
--
--55. Security Threats
-+    integrity_hash
-+}
-+
-+A RecoveryReceipt is durable evidence of a recovery attempt, its verification
-+and residual risks. It is NOT a WORLD_COMMIT_RECEIPT, cannot prove an
-+authoritative modeled-World version and MUST NOT independently authorize
-+World mutation. If recovery changes canonical modeled World State, its
-+RecoveryReceipt MUST reference the distinct genuine WORLD_COMMIT_RECEIPT
-+produced by a separately authorized, freshly verified World Kernel exact-parent
-+CAS commit. A compensation or corrective external action is a separate
-+externally observable operation requiring its own authorization, stable
-+identity/idempotency controls, evidence and reconciliation; it is not World
-+rollback by rewriting history.
-+
-+⸻
-+
-+55. Security Threats
- 
- Recovery introduces its own attack surface.
- 
-@@ -1568,13 +1579,19 @@
-   ↓
- AUTHORIZATION
-   ↓
--RECOVERY ACTION
--  ↓
--VERIFICATION
--  ↓
--WORLD UPDATE
--  ↓
--EXPERIENCE
-+RECOVERY ACTION (EXTERNAL EFFECT / COMPENSATION TRACKED SEPARATELY)
-+  ↓
-+EXTERNAL-STATE OBSERVATION / UNKNOWN-EFFECT RECONCILIATION
-+  ↓
-+FRESH VERIFICATION
-+  ↓
-+IF CANONICAL MODELED-WORLD CHANGE IS REQUIRED:
-+  SEPARATE AUTHORIZATION + EXACT-PARENT WORLD KERNEL CAS
-+  → ATOMIC WORLD VERSION + WORLD_COMMIT_RECEIPT + DELIVERY INTENT
-+ELSE:
-+  DURABLE AUDIT-ONLY RECOVERY (NO WORLD COMMIT)
-+  ↓
-+EXPERIENCE
-   ↓
- LEARNING
  
