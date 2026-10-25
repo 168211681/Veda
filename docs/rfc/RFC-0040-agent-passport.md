@@ -1,6 +1,6 @@
 RFC-0040 — Agent Passport
 
-Status: Architecture
+Document Classification: Architecture
 Layer: 15 — Identity & Trust
 Depends On: RFC-0001, RFC-0009, RFC-0010, RFC-0011, RFC-0012, RFC-0013, RFC-0028, RFC-0029, RFC-0032, RFC-0033, RFC-0038, RFC-0039
 Used By: RFC-0041, RFC-0044, RFC-0045, RFC-0046, RFC-0047, RFC-0048

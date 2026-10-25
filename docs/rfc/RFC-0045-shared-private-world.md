@@ -1,6 +1,6 @@
 RFC-0045 — Shared / Private World
 
-Status: Architecture
+Document Classification: Architecture
 Layer: 17 — Multi-Agent / Federation
 Depends On: RFC-0001, RFC-0002, RFC-0003, RFC-0004, RFC-0009, RFC-0010, RFC-0012, RFC-0013, RFC-0014, RFC-0017, RFC-0029, RFC-0031, RFC-0032, RFC-0039, RFC-0040, RFC-0041, RFC-0042, RFC-0043, RFC-0044
 Related: RFC-0046

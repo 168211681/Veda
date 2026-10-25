@@ -1,6 +1,6 @@
 RFC-0039 — Veda Identity
 
-Status: Architecture
+Document Classification: Architecture
 Layer: 15 — Identity & Trust
 Depends On: RFC-0001, RFC-0002, RFC-0003, RFC-0009, RFC-0010, RFC-0028, RFC-0030, RFC-0031, RFC-0032, RFC-0033, RFC-0038
 Used By: RFC-0040, RFC-0041, RFC-0044, RFC-0046, RFC-0047, RFC-0048
