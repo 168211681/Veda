@@ -255,6 +255,21 @@ Chronicle
     ↓
 "ประวัติทั้งหมดที่เกิดขึ้น"
 
+Event Fabric is transport, validation, correlation and historical projection;
+it is not authority for current modeled World State. Only the World Kernel may
+perform the authoritative exact-parent CAS commit. For a consequential
+transition the canonical ordering is:
+
+Authorization → Execution → Observation → Evidence → Verification
+→ VerificationReceipt → Exact-parent applicability check
+→ World Kernel CAS atomic commit → Post-commit successful outcome delivery.
+
+The World Kernel commit atomically exposes all three, or none: the resulting
+authoritative World version, the immutable WORLD_COMMIT_RECEIPT and the durable
+committed-event delivery intent. The delivery intent is created inside that
+boundary; actual delivery, acknowledgement, redelivery and consumer application
+occur afterward through the applicable delivery mechanism.
+
 ⸻
 
 7. Event Object
@@ -288,11 +303,25 @@ Event {
     severity
     evidence_refs
     verification_refs
+    candidate_transition_hash
+    parent_world_version
+    world_commit_receipt_ref
     provenance
     sensitivity
     retention_policy
     integrity
 }
+
+The lineage fields are Veda-owned conditional linkage. A pre-commit factual
+event MUST NOT require or fabricate a WORLD_COMMIT_RECEIPT. A post-commit
+successful modeled-World outcome MUST reference the genuine
+WORLD_COMMIT_RECEIPT for its actual authoritative World Kernel commit. If that
+receipt cannot be resolved and validated, the event MUST NOT be emitted or
+represented as a successful modeled-World outcome; failed or unresolved
+delivery MUST retain truthful factual evidence. Candidate hash, parent
+version, evidence references and VerificationReceipt references exist only
+when applicable to the event lifecycle; they do not impose Veda-internal
+fields on external providers and must not create cyclic receipt dependencies.
 
 ⸻
 
@@ -456,7 +485,7 @@ ActionExecuted
 FileModified
 PaymentSubmitted
 VerificationCompleted
-WorldStateUpdated
+WorldStateUpdated (observation of an already committed transition)
 
 ⸻
 
@@ -537,7 +566,7 @@ Trace: user_request_001
 │       └── external.api
 ├── verification
 │   └── external.read
-└── world.update
+└── world.commit.observed
 
 ทำให้สามารถ reconstruct causal execution chain
 
@@ -1044,7 +1073,13 @@ Compensation
  ↓
 Verification
  ↓
-Recovered
+VerificationReceipt
+ ↓
+Exact-parent applicability check
+ ↓
+World Kernel CAS atomic commit
+ ↓
+Post-commit successful outcome delivery
 
 ถ้าไม่สำเร็จ:
 
@@ -1058,15 +1093,17 @@ World state change ต้องสามารถอธิบาย:
 
 World(t)
    ↓
-Action
+Authorization → Action → External Effect
    ↓
-External Effect
+Observation → Evidence → Verification
    ↓
-Observation
+VerificationReceipt → Exact-parent applicability check
    ↓
-Verification
+World Kernel CAS atomic commit
    ↓
-World(t+1)
+World(t+1) + WORLD_COMMIT_RECEIPT + delivery intent
+   ↓
+Post-commit successful outcome delivery
 
 นี่เป็น backbone ของ auditability
 
@@ -1117,7 +1154,9 @@ Deduplication
 Ordering
 Validation
 
-ก่อนถูกใช้เป็น authoritative world update
+ก่อนถูกใช้เป็น input สำหรับ candidate preparation; external/event evidence
+ไม่ใช่การ commit Current modeled World State. มีเพียง World Kernel เท่านั้นที่
+ทำ authoritative commit ผ่าน exact-parent CAS boundary.
 
 ⸻
 
@@ -1267,6 +1306,11 @@ World Model
 Notification
 Diagnostics
 
+World Model consumers MAY observe or project events and MAY submit permitted
+candidate transitions. Receiving, acknowledging, replaying or applying an
+event MUST NOT independently authorize or commit authoritative modeled World
+State. Only the World Kernel owns that commit authority.
+
 ⸻
 
 55. Event Delivery
@@ -1275,7 +1319,7 @@ Diagnostics
 
 AT_MOST_ONCE
 AT_LEAST_ONCE
-EXACTLY_ONCE_SEMANTICS
+EXACTLY_ONCE_SEMANTICS (scoped delivery/consumer semantics only)
 
 อย่างไรก็ตาม implementation ต้องไม่สมมติว่า network-level exactly-once เป็นสิ่งมหัศจรรย์ที่มีอยู่จริง
 
@@ -1285,7 +1329,12 @@ idempotency
 deduplication
 event identity
 
-เพื่อสร้าง exactly-once semantic behavior เมื่อจำเป็น
+เพื่อสร้าง scoped consumer deduplication semantics เมื่อจำเป็น. These
+mechanisms are not proof of exactly-once external execution or a second World
+commit. Delivery intent, delivery attempts, acknowledgements, redelivery and
+consumer application are distinct records. UNKNOWN external effects require
+reconciliation using stable action identity; no external exactly-once claim is
+valid without an explicit external-system guarantee.
 
 ⸻
 
@@ -1386,6 +1435,13 @@ Retry
 Chronicle
 
 ห้ามเสีย critical audit เพียงเพราะ network หาย
+
+Failed delivery, partial results, UNKNOWN, indeterminate and recovery-required
+records MUST remain durable and truthful, linked to stable event/action identity
+where applicable. A transport acknowledgement, redelivery or consumer
+application MUST NOT create a new World commit. Successful modeled-World
+outcome events require a successful World Kernel commit; reconciliation cannot
+bypass authorization, verification or exact-parent applicability.
 
 ⸻
 
@@ -1559,7 +1615,7 @@ Authorization
 Action
 External Effect
 Verification
-World Update
+World commit observation / receipt
 
 ⸻
 
@@ -2000,7 +2056,12 @@ World(t)
 
 initial_snapshot
 +
-validated world events
+valid canonical WORLD_COMMIT_RECEIPT records and their bound inputs
+
+Authoritative reconstruction MUST NOT treat a validated factual event alone as
+proof of World commitment, and MUST NOT create a second commit authority or
+re-execute external effects. Historical factual replay and projection rebuild
+remain distinct from authoritative World reconstruction.
 
 แต่ต้องแยก:
 
@@ -2861,6 +2922,24 @@ AUD-30
 
 Veda must be able to reconstruct consequential execution history.
 
+AUD-31
+
+Event Fabric MUST NOT commit authoritative modeled World State. Consequential
+commit observations MUST be traceable to the applicable parent version,
+candidate/evidence context and genuine WORLD_COMMIT_RECEIPT when one exists.
+
+AUD-32
+
+The World Kernel atomic commit MUST expose the resulting World version,
+WORLD_COMMIT_RECEIPT and committed-event delivery intent together or not at all;
+actual delivery is subsequent and is not part of the CAS transaction.
+
+AUD-33
+
+Factual, failed, UNKNOWN and recovery-required events MUST remain durable and
+must not be promoted to successful modeled-World outcomes without a successful
+World Kernel commit.
+
 ⸻
 
 135. Reference Flow
@@ -2901,7 +2980,25 @@ Veda must be able to reconstruct consequential execution history.
                  VERIFICATION
                        │
                        ▼
-                  WORLD UPDATE
+       EXACT-PARENT CHECK
+                       │
+                       ▼
+            WORLD KERNEL CAS ATOMIC COMMIT
+        ┌─────────────────────────────────┐
+        │ Resulting World version         │
+        │ Immutable WORLD_COMMIT_RECEIPT  │
+        │ Durable committed-event         │
+        │ delivery intent (created here)  │
+        └─────────────────────────────────┘
+                       │
+                       ▼
+       APPLICABLE EVENT FABRIC / DELIVERY
+                    MECHANISM
+                       │
+                       ▼
+      POST-COMMIT DELIVERY ATTEMPT / OUTCOME
+                       │
+                       ▼
         ┌─────────────────────────────────┐
         │       EVENT / TRACE FABRIC       │
         │                                 │
@@ -2913,11 +3010,16 @@ Veda must be able to reconstruct consequential execution history.
         │  Action ────────┤              │
         │  External Effect┤              │
         │  Verification ──┤              │
-        │  World Update ──┘              │
+        │  Commit observed ─┘            │
         └─────────────────────────────────┘
                        │
                        ▼
                    CHRONICLE
+
+The final EVENT / TRACE FABRIC box represents audit/trace recording and
+historical projection of the same committed intent, delivery attempts and
+observed outcomes, including failed or UNKNOWN delivery outcomes. It is not a
+second delivery mechanism and has no authoritative World commit authority.
 
 ⸻
 
@@ -2925,7 +3027,7 @@ Veda must be able to reconstruct consequential execution history.
 
 Veda ต้องสามารถเดินย้อนกลับจาก:
 
-World Change
+Committed World Change
 
 ไปถึง:
 
@@ -2949,7 +3051,9 @@ Intent
 → Action
 → External Effect
 → Verification
-→ World
+→ Exact-parent applicability check
+→ World Kernel CAS atomic commit
+→ Post-commit outcome delivery
 
 ดังนั้น:
 
@@ -2957,7 +3061,11 @@ Every consequential action must leave a reconstructable history.
 
 และ:
 
-The audit trail records what Veda did and observed. It does not, by itself, decide what is true.
+The audit trail records what Veda did and observed. It does not, by itself,
+decide what is true or commit the modeled World. A factual event, delivery
+acknowledgement, VerificationReceipt or RecoveryReceipt is not a
+WORLD_COMMIT_RECEIPT; successful modeled-World outcome events follow only a
+successful World Kernel atomic commit.
 
 ⸻
 
