@@ -1,6 +1,7 @@
 RFC-0026 — Verification Engine
 
 Status: Draft
+G1 Compatibility: PROPOSED / OWNER UNDECIDED — NOT ACCEPTED; no Governance Gate transition
 Layer: 10 — Verification & Reality
 Depends On: RFC-0002, RFC-0003, RFC-0004, RFC-0008, RFC-0012, RFC-0013, RFC-0014, RFC-0015, RFC-0018, RFC-0020, RFC-0021, RFC-0022, RFC-0023, RFC-0024, RFC-0025
 
@@ -68,7 +69,13 @@ Collect Evidence
  ↓
 Verify
  ↓
-Update World
+Durable VerificationReceipt (where consequential)
+ ↓
+Exact-parent applicability check
+ ↓
+World Kernel CAS atomic commit
+ ↓
+Post-commit successful outcome delivery
 
 An action returning:
 
@@ -1043,7 +1050,7 @@ This aligns with emerging agent-verification architectures that explicitly verif
 
 42. Verification Receipt
 
-A completed verification MAY produce:
+For a consequential candidate transition, the Verification Engine MUST durably persist an immutable, independently inspectable VerificationReceipt before the World Kernel considers commitment. A verification that is not part of a consequential modeled-World transition MAY produce a receipt according to its verification policy; it cannot claim a World commit.
 
 VerificationReceipt {
     verification_id
@@ -1051,6 +1058,11 @@ VerificationReceipt {
     expected
     observed
     evidence_hashes
+    evidence_set_hash
+    exact_parent_world_version
+    candidate_transition_hash
+    verification_policy_version
+    authorization_ref
     verifier
     method
     timestamp
@@ -1058,8 +1070,7 @@ VerificationReceipt {
     signature
 }
 
-The receipt SHOULD be independently verifiable.
-
+For a consequential transition the receipt MUST bind the exact parent World version, candidate transition hash, exact evidence set and verification policy version; where applicable it SHOULD bind the permission-decision receipt and verifier identity. The receipt MUST be durably visible before authoritative commitment; inability to persist required verification evidence MUST fail closed. Only a valid PASSED receipt satisfying policy and matching the exact current parent MAY be submitted as a prerequisite to a World Kernel CAS commit. The receipt is a factual verification record, not authorization and not a WORLD_COMMIT_RECEIPT. It MUST NOT contain or fabricate a future World commit receipt, and MUST NOT itself mutate the modeled World.
 ⸻
 
 43. Cryptographic Integrity
@@ -1228,25 +1239,27 @@ This prevents false completion.
 
 50. Verification and World Update
 
-Only verified observations SHOULD update authoritative World state when the relevant policy requires verification.
+Verification is an evidence-producing operation and MUST NOT update authoritative modeled World State directly. For a consequential transition, a successful verification MAY supply the World Kernel with a durable VerificationReceipt bound to the exact parent World version, candidate transition hash, evidence set and verification policy version. The Kernel alone MUST validate applicability, applicable permission and invariants, then perform the exact-parent compare-and-swap.
 
 Observation
- ↓
+  ↓
 Evidence
- ↓
+  ↓
 Verification
- ↓
-World Update
+  ↓
+Durable VerificationReceipt
+  ↓
+Exact-parent applicability + authorization recheck
+  ↓
+World Kernel CAS atomic commit
+  ↓
+World(t+1) + WORLD_COMMIT_RECEIPT + delivery intent
+  ↓
+Post-commit successful outcome delivery
 
-Unverified information MAY exist as:
+The World Kernel MUST expose the resulting authoritative World version, immutable WORLD_COMMIT_RECEIPT and durable committed-event delivery intent together or none. Delivery, acknowledgement, redelivery and Chronicle projections happen after commit and MUST NOT create a second commit.
 
-Candidate State
-Belief
-Observation
-Pending Verification
-
-but MUST NOT silently become authoritative fact.
-
+A parent mismatch, invalid receipt, failed audit persistence, FAILED or UNKNOWN verification MUST NOT commit. A stale parent requires candidate re-preparation and fresh verification, not reuse of a prior receipt. Failed and uncertain paths remain durably auditable. Unverified information MAY exist as a candidate state, belief, observation or pending verification; it MUST NOT silently become authoritative modeled World State.
 ⸻
 
 51. Verification and Knowledge
@@ -1473,9 +1486,11 @@ Resolve Conflicts
         ↓
 Determine Status
         ↓
-Create Verification Record
+Persist VerificationReceipt (where required)
         ↓
-Update World / Trigger Recovery
+Submit valid candidate to World Kernel / Trigger authorized recovery
+
+This branch never grants the Verification Engine direct World mutation authority. Recovery also requires its own permitted, verified World Kernel transition if modeled World State changes.
 
 ⸻
 
@@ -1496,6 +1511,10 @@ COMPARING
 EVALUATING
     ↓
 VERIFIED
+    ↓
+RECEIPT_DURABLY_RECORDED (required for consequential transitions)
+    ↓
+CANDIDATE_ELIGIBLE_FOR_WORLD_KERNEL_CHECK (not committed)
 
 Alternative terminal states:
 
@@ -1508,6 +1527,7 @@ INVALID
 EXPIRED
 CANCELLED
 
+Neither VERIFIED nor receipt persistence implies successful modeled-World commitment. Stale or failed applicability checks MUST produce an auditable conflict/rejection, and retry requires a new candidate plus a new applicable verification receipt.
 ⸻
 
 62. Verification API
@@ -1968,7 +1988,7 @@ This distinction is one of the most important responsibilities of the Verificati
          VERIFIED     FAILED      UNKNOWN
             │           │           │
             ▼           ▼           ▼
-       WORLD UPDATE   RECOVERY    ESCALATION
+       KERNEL CAS     RECOVERY    ESCALATION
 
 ⸻
 
@@ -2008,7 +2028,9 @@ EVIDENCE
    ↓
 VERIFICATION
    ↓
-WORLD UPDATE
+WORLD KERNEL CAS COMMIT + RECEIPT
+   ↓
+POST-COMMIT OUTCOME DELIVERY
    ↓
 EXPERIENCE
    ↓
@@ -2140,6 +2162,22 @@ VER-30
 
 No consequential action may be considered fully successful solely because the executor claims success.
 
+VER-31
+
+Every consequential modeled-World verification MUST durably bind its exact parent World version, candidate hash, evidence set and verification policy version before World Kernel commitment.
+
+VER-32
+
+VerificationReceipts MUST NOT authorize or directly mutate authoritative modeled World State. Only World Kernel exact-parent CAS may commit the atomic World version, WORLD_COMMIT_RECEIPT and delivery intent triple.
+
+VER-33
+
+A stale receipt, missing audit persistence, failed check, or UNKNOWN outcome MUST block a successful World commit and preserve truthful failure evidence.
+
+VER-34
+
+Post-commit successful outcome delivery and Chronicle acknowledgement MUST NOT create a second World commit.
+
 ⸻
 
 80. Final Principle
@@ -2158,7 +2196,7 @@ Evidence
     ↓
 Verification
     ↓
-Reality State
+Verified Observed Reality (not a World commit)
 
 Therefore:
 
@@ -2173,3 +2211,5 @@ Therefore:
 Veda needs evidence for each transition.
 
 That is the purpose of RFC-0026.
+
+For a consequential modeled-World transition, the post-verification authoritative step belongs exclusively to the World Kernel and occurs only through a separately authorized, exact-parent, receipt-bound atomic CAS commit. This remains a Draft compatibility proposal; it does not accept RFC-0026 or change Governance Gates.

@@ -1,6 +1,7 @@
 RFC-0032 — Veda Chronicle
 
 Status: Draft
+G1 Compatibility: PROPOSED / OWNER UNDECIDED — NOT ACCEPTED; no Governance Gate transition
 Layer: Layer 12 — Audit
 Depends On: RFC-0001 through RFC-0031
 Related: RFC-0002 World Model, RFC-0003 Event Model, RFC-0004 State & World Transition, RFC-0012 Evidence, RFC-0013 Knowledge, RFC-0017 Memory, RFC-0021 Temporal Model, RFC-0026 Verification, RFC-0027 Rollback & Recovery, RFC-0031 Event/Audit/Trace Fabric
@@ -128,6 +129,8 @@ World(tn)
        └───────────┼───────────┘
                    ▼
               World History
+
+This is a historical-read/projection architecture. Chronicle owns immutable factual history, not authoritative current modeled World State. World Kernel alone performs authorized, receipt-bound, exact-parent CAS commits. A Chronicle snapshot or projected reconstruction MUST NOT mutate or replace the canonical World version.
 
 ⸻
 
@@ -364,49 +367,36 @@ Timeline
 09:05 Action
 09:05 External Effect
 09:06 Verification
-09:07 World Update
+09:07 World Kernel CAS Commit (WORLD_COMMIT_RECEIPT)
+09:08 Post-commit outcome delivery / Chronicle projection
 09:10 Reflection
 
 ⸻
 
 15. World Reconstruction
 
-ต้องสามารถ:
+Chronicle MAY reconstruct a read-only historical projection of modeled World State from the canonical World lineage, but MUST NOT become an additional World commit authority.
 
-snapshot(t0)
-+
-events(t0 → t1)
-=
-world(t1)
+Historical modeled-World projection at Wn:
+World0 + ordered valid canonical WORLD_COMMIT_RECEIPT records + exact bound transition inputs = ProjectedWorld(Wn)
 
-ดังนั้น:
+A snapshot MAY accelerate projection only when its base version, integrity and provenance are verified. It is not standalone historical or current-World authority. Reconstruction MUST validate each receipt against its canonical parent version, resulting version, candidate transition hash, evidence set, verification policy version, authorization and applicable verification references; any gap, missing bound input or invalid receipt MUST be reported, not silently guessed or replaced by a factual Event.
 
-World(t)
-=
-Snapshot
-+
-Validated World Events
-
+Chronicle facts, pre-commit Events, transport acknowledgements, outcome delivery attempts and recovery evidence provide historical context. None of these records on their own proves or performs a World commit. Historical replay MUST NOT re-execute external effects or publish the projection as a new canonical World version.
 ⸻
 
 16. Event Eligibility
 
-ไม่ใช่ทุก Chronicle record สามารถเปลี่ยน World
+Chronicle records may describe a proposed, observed, verified, failed or successfully committed operation. Their descriptive `world_effect` classification is a historical annotation, never permission to apply a World mutation.
 
-Record ต้องมี:
-
-world_effect
-
-เช่น:
-
+world_effect:
 NONE
 PROPOSED
 OBSERVED
 VERIFIED
-COMMITTED
+COMMITTED_OBSERVED (only when genuine WORLD_COMMIT_RECEIPT is valid)
 
-World reconstruction ใช้เฉพาะ event ที่ policy อนุญาต
-
+A validated factual event is not sufficient input to authoritative reconstruction. The only eligible modeled-World transition record is a canonical WORLD_COMMIT_RECEIPT plus its exact bound transition inputs, processed as a **read-only historical projection**. A `COMMITTED_OBSERVED` annotation without a valid receipt MUST be rejected as a successful World-change claim. The World Kernel alone owns current World State and its CAS commit boundary.
 ⸻
 
 17. Unverified History
@@ -417,7 +407,7 @@ UNVERIFIED
 
 สามารถเก็บใน Chronicle ได้
 
-แต่ไม่ควรถูกใช้เป็น authoritative world transition โดยอัตโนมัติ
+และ MUST NOT ถูกใช้เป็น authoritative world transition; verification status alone does not establish WORLD_COMMIT_RECEIPT or permit World mutation.
 
 ⸻
 
@@ -1825,6 +1815,8 @@ Verified
 
 101. Chronicle Commit
 
+The word `Commit` in Chronicle storage refers **only** to durable immutable factual-record persistence. It MUST NOT be conflated with World Kernel authoritative modeled-World commitment.
+
 Record สามารถมี state:
 
 RECEIVED
@@ -1833,6 +1825,7 @@ PERSISTED
 INTEGRITY_CONFIRMED
 ARCHIVED
 
+None of these historical record states can create, replace, or imply a WORLD_COMMIT_RECEIPT. Event/Chronicle persistence failure must remain a separately auditable failure fact and MUST follow applicable fail-closed requirements for pre-execution permission records.
 ⸻
 
 102. Chronicle Receipt
@@ -1848,6 +1841,7 @@ ChronicleReceipt {
     timestamp
 }
 
+A ChronicleReceipt attests historical storage only. It MUST NOT be interpreted as a WORLD_COMMIT_RECEIPT, VerificationReceipt or RecoveryReceipt. Neither acknowledgement nor replay of this receipt may advance authoritative World State or authorize an external effect.
 ⸻
 
 103. Historical Proof
@@ -2048,6 +2042,8 @@ export(range)
 archive(range)
 restore_archive(ref)
 
+All Chronicle historical and snapshot APIs above, including `reconstruct_world(time)` and `restore_snapshot()`, MUST be read-only projections or controlled historical-store maintenance. They MUST NOT write current canonical World State, perform World Kernel CAS, re-execute external effects or assert successful outcome without a genuine WORLD_COMMIT_RECEIPT. Any actual corrective modeled-World transition requires a new separately authorized and verified World Kernel commit.
+
 ⸻
 
 112. Historical Context API
@@ -2113,22 +2109,23 @@ QUARANTINED
 
 115. Historical State Machine
 
-World reconstruction:
+Historical modeled-World projection:
 
-SNAPSHOT_SELECTED
+SNAPSHOT_SELECTED_AND_VERIFIED
        ↓
-EVENT_RANGE_RESOLVED
+CANONICAL_RECEIPT_RANGE_RESOLVED
        ↓
-EVENTS_VALIDATED
+RECEIPTS_AND_BOUND_INPUTS_VALIDATED
        ↓
-EVENTS_ORDERED
+CANONICAL_PARENT_ORDER_CHECKED
        ↓
-EVENTS_APPLIED
+READ_ONLY_TRANSITIONS_PROJECTED
        ↓
-STATE_VERIFIED
+STATE_AND_GAPS_VERIFIED
        ↓
-WORLD_RECONSTRUCTED
+HISTORICAL_PROJECTION_AVAILABLE
 
+Missing receipts, gaps, invalid parent lineage or missing bound inputs MUST produce `RECONSTRUCTION_INCOMPLETE` or explicit conflict; no factual event may be promoted to a World commit to fill a gap. Historical projection is not a World Kernel mutation and MUST NOT cause external side effects.
 ⸻
 
 116. Reconstruction Failure
@@ -2195,11 +2192,11 @@ Snapshots must be integrity-checkable.
 
 CHR-13
 
-World reconstruction must use policy-approved events.
+Historical modeled-World reconstruction MUST derive only from valid canonical WORLD_COMMIT_RECEIPT records with their exact bound inputs; a policy-approved event alone is not sufficient.
 
 CHR-14
 
-Unverified events must not automatically become authoritative world state.
+Factual or unverified events MUST NOT create or become authoritative World State; even a verified event alone cannot prove World Kernel commitment.
 
 CHR-15
 
@@ -2264,6 +2261,22 @@ Chronicle must not invent missing history.
 CHR-30
 
 Veda must be able to distinguish what happened, what was recorded, what was believed, and what was verified.
+
+CHR-31
+
+Chronicle MUST NOT commit or mutate authoritative current modeled World State or mint a WORLD_COMMIT_RECEIPT.
+
+CHR-32
+
+Authoritative modeled-World history reconstruction MUST validate canonical WORLD_COMMIT_RECEIPT lineage and exact bound inputs; event-only reconstruction is invalid.
+
+CHR-33
+
+ChronicleReceipt, VerificationReceipt and RecoveryReceipt MUST NOT be treated as WORLD_COMMIT_RECEIPT or as permission to execute an external effect.
+
+CHR-34
+
+Historical replay, projection, snapshot restoration and delivery retry MUST NOT re-execute external effects or create new World commits.
 
 ⸻
 
@@ -2332,7 +2345,13 @@ Observation
     ↓
 Verification
     ↓
-World Update
+World Kernel exact-parent CAS commit (if successful)
+    ↓
+WORLD_COMMIT_RECEIPT + durable delivery intent
+    ↓
+Post-commit successful outcome event / Chronicle projection
+
+A file deletion's external effect cannot be undone merely by historical replay or World rollback. A missing World receipt requires truthful failure/UNKNOWN evidence and external-effect reconciliation before any new execution.
 
 จากนั้นสามารถถาม:
 
